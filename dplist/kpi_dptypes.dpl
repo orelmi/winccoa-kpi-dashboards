@@ -1,0 +1,57 @@
+# WinCC OA Datapoint Type & Instance Export
+# KPI Configuration System
+# ═══════════════════════════════════════════════════════════════
+
+# ── Datapoint Type: KPI_Config ─────────────────────────────────
+# Stores all configuration as JSON strings
+# This is the central configuration store read by the webview
+# and by the CTRL calculation engines.
+
+DpType
+TypeName
+"KPI_Config"
+# Elements (all string to store JSON)
+"sources"	1	25	# string — JSON array of source configs
+"aggregations"	1	25	# string — JSON array of aggregation configs
+"machines"	1	25	# string — JSON array of machine configs
+"oee"	1	25	# string — JSON array of OEE configs
+
+# ── Datapoint Type: KPI_Result ─────────────────────────────────
+# Stores a single aggregation KPI result
+DpType
+TypeName
+"KPI_Result"
+"value"	1	22	# float — current aggregated value
+"lastCalc"	1	26	# time — last calculation timestamp
+"status"	1	23	# int — 0=OK, 1=Warning, 2=Error
+"unit"	1	25	# string — unit of the result
+
+# ── Datapoint Type: KPI_OEE_Result ─────────────────────────────
+# Stores OEE calculation results for a line/machine
+DpType
+TypeName
+"KPI_OEE_Result"
+"Availability"	1	22	# float (%)
+"Performance"	1	22	# float (%)
+"Quality"	1	22	# float (%)
+"OEE"	1	22	# float (%)
+"StateTime"	1	24	# dyn_float — seconds per state
+"lastCalc"	1	26	# time
+
+# ── Datapoint Instances ────────────────────────────────────────
+
+# Central configuration instance
+DpInstance
+"KPI_Config"	"KPI_Config"
+
+# ── Data Type Codes Reference ──────────────────────────────────
+# 20 = char/byte
+# 21 = unsigned int (uint)
+# 22 = float
+# 23 = int
+# 24 = dyn_float
+# 25 = string (text)
+# 26 = time
+# 27 = bool
+# 28 = bit32
+# 46 = blob

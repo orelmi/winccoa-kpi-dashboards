@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WinCC OA — KPI Configuration</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-left">
+      <h1 class="app-title">KPI Configuration</h1>
+      <span class="app-subtitle">WinCC OA Performance Manager</span>
+    </div>
+    <div class="header-right">
+      <span id="connectionStatus" class="status-badge status-mock">MODE SIMULATION</span>
+    </div>
+  </header>
+
+  <nav class="tab-nav">
+    <button class="tab-btn active" data-tab="sources">
+      <span class="tab-icon">&#9881;</span> Sources
+    </button>
+    <button class="tab-btn" data-tab="aggregations">
+      <span class="tab-icon">&#931;</span> Aggregations
+    </button>
+    <button class="tab-btn" data-tab="machineStates">
+      <span class="tab-icon">&#9208;</span> Machine States
+    </button>
+    <button class="tab-btn" data-tab="oee">
+      <span class="tab-icon">&#9733;</span> OEE
+    </button>
+  </nav>
+
+  <main class="tab-content">
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- TAB: SOURCES                                           -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <section id="tab-sources" class="tab-pane active">
+      <div class="pane-toolbar">
+        <h2>Source Datapoints</h2>
+        <button class="btn btn-primary" id="btnAddSource">+ Add Source</button>
+      </div>
+      <table class="config-table" id="sourceTable">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Datapoint</th>
+            <th>Type</th>
+            <th>Characterization</th>
+            <th>Unit</th>
+            <th>Archiving</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="sourceTableBody"></tbody>
+      </table>
+      <div class="empty-state" id="sourceEmpty">
+        <p>No sources configured yet. Click <strong>+ Add Source</strong> to begin.</p>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- TAB: AGGREGATIONS                                      -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <section id="tab-aggregations" class="tab-pane">
+      <div class="pane-toolbar">
+        <h2>KPI Aggregations</h2>
+        <button class="btn btn-primary" id="btnAddAggregation">+ Add Aggregation</button>
+      </div>
+      <table class="config-table" id="aggTable">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Source</th>
+            <th>Method</th>
+            <th>Period</th>
+            <th>Target DP</th>
+            <th>Enabled</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="aggTableBody"></tbody>
+      </table>
+      <div class="empty-state" id="aggEmpty">
+        <p>No aggregations configured yet. Click <strong>+ Add Aggregation</strong> to begin.</p>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- TAB: MACHINE STATES                                    -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <section id="tab-machineStates" class="tab-pane">
+      <div class="pane-toolbar">
+        <h2>Machine State Configuration</h2>
+        <button class="btn btn-primary" id="btnAddMachine">+ Add Machine</button>
+      </div>
+
+      <div id="machineList"></div>
+      <div class="empty-state" id="machineEmpty">
+        <p>No machines configured. Click <strong>+ Add Machine</strong> to define machine states.</p>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- TAB: OEE                                               -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <section id="tab-oee" class="tab-pane">
+      <div class="pane-toolbar">
+        <h2>OEE Configuration</h2>
+        <button class="btn btn-primary" id="btnAddOee">+ Add OEE Line</button>
+      </div>
+
+      <div id="oeeList"></div>
+      <div class="empty-state" id="oeeEmpty">
+        <p>No OEE configurations. Click <strong>+ Add OEE Line</strong> to configure Overall Equipment Effectiveness.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- MODAL: Source Configuration                             -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="modalSource">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modalSourceTitle">Add Source</h3>
+        <button class="modal-close" data-close="modalSource">&times;</button>
+      </div>
+      <form id="formSource" class="modal-body">
+        <input type="hidden" id="srcEditId">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="srcName">Name</label>
+            <input type="text" id="srcName" required placeholder="e.g. Water Counter Bldg A">
+          </div>
+          <div class="form-group">
+            <label for="srcDp">Source Datapoint</label>
+            <div class="dp-selector">
+              <input type="text" id="srcDp" required placeholder="System1:Plant.Sensor.value">
+              <button type="button" class="btn btn-sm" id="btnBrowseDp">Browse</button>
+            </div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="srcDataType">Data Type</label>
+            <select id="srcDataType">
+              <option value="FLOAT">FLOAT</option>
+              <option value="INT">INT</option>
+              <option value="BOOL">BOOL</option>
+              <option value="STRING">STRING</option>
+              <option value="UINT">UINT</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="srcCharacterization">Characterization</label>
+            <select id="srcCharacterization">
+              <option value="PROCESS_VALUE">Process Value</option>
+              <option value="COUNTER">Counter</option>
+              <option value="FLOW_RATE">Flow Rate</option>
+              <option value="STATUS">Status (ON/OFF)</option>
+              <option value="SETPOINT">Setpoint</option>
+              <option value="ENERGY">Energy Meter</option>
+              <option value="MACHINE_STATE">Machine State</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="srcUnit">Unit</label>
+            <input type="text" id="srcUnit" placeholder="e.g. m3/h, kW, degC">
+          </div>
+        </div>
+
+        <fieldset class="form-fieldset">
+          <legend>Archiving</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="srcArchEnabled" checked> Enable Archiving
+              </label>
+            </div>
+            <div class="form-group">
+              <label for="srcArchClass">Archive Class</label>
+              <select id="srcArchClass">
+                <option value="_EVENT">Event-driven</option>
+                <option value="_1s">1 second</option>
+                <option value="_5s">5 seconds</option>
+                <option value="_10s">10 seconds</option>
+                <option value="_30s">30 seconds</option>
+                <option value="_1min">1 minute</option>
+                <option value="_5min">5 minutes</option>
+                <option value="_15min">15 minutes</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="srcSmoothMode">Smoothing</label>
+              <select id="srcSmoothMode">
+                <option value="NONE">None</option>
+                <option value="DEADBAND_ABS">Deadband Absolute</option>
+                <option value="DEADBAND_REL">Deadband Relative (%)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="srcSmoothValue">Smoothing Value</label>
+              <input type="number" id="srcSmoothValue" value="0" step="0.01" min="0">
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="form-fieldset">
+          <legend>Validity Limits</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="srcMinValid">Min Valid</label>
+              <input type="number" id="srcMinValid" step="any" placeholder="No limit">
+            </div>
+            <div class="form-group">
+              <label for="srcMaxValid">Max Valid</label>
+              <input type="number" id="srcMaxValid" step="any" placeholder="No limit">
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="modalSource">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Source</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- MODAL: Aggregation Configuration                        -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="modalAggregation">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modalAggTitle">Add Aggregation</h3>
+        <button class="modal-close" data-close="modalAggregation">&times;</button>
+      </div>
+      <form id="formAggregation" class="modal-body">
+        <input type="hidden" id="aggEditId">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="aggName">KPI Name</label>
+            <input type="text" id="aggName" required placeholder="e.g. Hourly Water Consumption">
+          </div>
+          <div class="form-group">
+            <label for="aggSource">Source</label>
+            <select id="aggSource" required>
+              <option value="">-- Select Source --</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="aggMethod">Aggregation Method</label>
+            <select id="aggMethod">
+              <option value="SUM">Sum</option>
+              <option value="AVG">Average</option>
+              <option value="MIN">Minimum</option>
+              <option value="MAX">Maximum</option>
+              <option value="COUNT">Count</option>
+              <option value="DELTA">Delta (Counter)</option>
+              <option value="TIME_WEIGHTED_AVG">Time-Weighted Average</option>
+              <option value="FLOW_FROM_COUNTER">Flow Rate from Counter</option>
+              <option value="UPTIME_RATIO">Uptime Ratio</option>
+              <option value="STDDEV">Standard Deviation</option>
+            </select>
+          </div>
+        </div>
+        <fieldset class="form-fieldset">
+          <legend>Aggregation Period</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="aggPeriodType">Period Type</label>
+              <select id="aggPeriodType">
+                <option value="CALENDAR_ALIGNED">Calendar Aligned</option>
+                <option value="SLIDING">Sliding Window</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="aggAlignment">Alignment / Duration</label>
+              <select id="aggAlignment">
+                <option value="MINUTE_15">15 Minutes</option>
+                <option value="HOUR">Hour</option>
+                <option value="SHIFT">Shift</option>
+                <option value="DAY">Day</option>
+                <option value="WEEK">Week</option>
+                <option value="MONTH">Month</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row" id="rowSlidingDuration" style="display:none;">
+            <div class="form-group">
+              <label for="aggSlidingSeconds">Sliding Duration (seconds)</label>
+              <input type="number" id="aggSlidingSeconds" value="3600" min="1">
+            </div>
+          </div>
+        </fieldset>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="aggTargetDp">Target Datapoint</label>
+            <input type="text" id="aggTargetDp" placeholder="Auto-generated if empty">
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="aggEnabled" checked> Enabled
+            </label>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group full-width">
+            <label for="aggExpression">Custom Expression (optional)</label>
+            <input type="text" id="aggExpression" placeholder="e.g. delta / periodSeconds * 3600">
+            <span class="form-hint">Variables: delta, sum, avg, min, max, count, periodSeconds</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="modalAggregation">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Aggregation</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- MODAL: Machine Configuration                            -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="modalMachine">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h3 id="modalMachineTitle">Add Machine</h3>
+        <button class="modal-close" data-close="modalMachine">&times;</button>
+      </div>
+      <form id="formMachine" class="modal-body">
+        <input type="hidden" id="machEditId">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="machName">Machine Name</label>
+            <input type="text" id="machName" required placeholder="e.g. Packaging Line 1">
+          </div>
+          <div class="form-group">
+            <label for="machStateDp">State Datapoint</label>
+            <div class="dp-selector">
+              <input type="text" id="machStateDp" required placeholder="System1:Line1.MachineState">
+              <button type="button" class="btn btn-sm" id="btnBrowseMachDp">Browse</button>
+            </div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="machStateType">State Signal Type</label>
+            <select id="machStateType">
+              <option value="INT_CODE">Integer Code (0,1,2...)</option>
+              <option value="STRING_STATE">String State</option>
+              <option value="MULTI_BOOL">Multiple Booleans</option>
+            </select>
+          </div>
+        </div>
+
+        <fieldset class="form-fieldset">
+          <legend>State Definitions</legend>
+          <p class="form-hint">Define each possible machine state and categorize it for OEE calculation.</p>
+          <table class="config-table compact" id="stateDefTable">
+            <thead>
+              <tr>
+                <th>Value</th>
+                <th>Label</th>
+                <th>Category</th>
+                <th>Color</th>
+                <th>Is Planned</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="stateDefBody"></tbody>
+          </table>
+          <button type="button" class="btn btn-sm btn-secondary" id="btnAddStateDef">+ Add State</button>
+        </fieldset>
+
+        <fieldset class="form-fieldset">
+          <legend>Downtime Cause Tracking</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="machTrackCauses"> Enable Cause Tracking
+              </label>
+            </div>
+            <div class="form-group">
+              <label for="machCauseDp">Cause Datapoint</label>
+              <input type="text" id="machCauseDp" placeholder="System1:Line1.StopCause">
+            </div>
+          </div>
+          <div id="causeDefSection" style="display:none;">
+            <table class="config-table compact" id="causeDefTable">
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Label</th>
+                  <th>Category</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="causeDefBody"></tbody>
+            </table>
+            <button type="button" class="btn btn-sm btn-secondary" id="btnAddCauseDef">+ Add Cause</button>
+          </div>
+        </fieldset>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="modalMachine">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Machine</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- MODAL: OEE Configuration                                -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="modalOee">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h3 id="modalOeeTitle">Add OEE Configuration</h3>
+        <button class="modal-close" data-close="modalOee">&times;</button>
+      </div>
+      <form id="formOee" class="modal-body">
+        <input type="hidden" id="oeeEditId">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="oeeName">Line / Equipment Name</label>
+            <input type="text" id="oeeName" required placeholder="e.g. Packaging Line 1">
+          </div>
+          <div class="form-group">
+            <label for="oeeMachine">Machine (State Source)</label>
+            <select id="oeeMachine" required>
+              <option value="">-- Select Machine --</option>
+            </select>
+          </div>
+        </div>
+
+        <fieldset class="form-fieldset">
+          <legend>Availability</legend>
+          <p class="form-hint">Availability = (Planned Production Time - Unplanned Downtime) / Planned Production Time</p>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeePlannedHours">Planned Production Hours/Day</label>
+              <input type="number" id="oeePlannedHours" value="24" min="0" max="24" step="0.5">
+            </div>
+            <div class="form-group">
+              <label for="oeeAvailMethod">Calculation Method</label>
+              <select id="oeeAvailMethod">
+                <option value="FROM_STATES">From Machine States (auto)</option>
+                <option value="MANUAL_DP">From Datapoints (manual)</option>
+              </select>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="form-fieldset">
+          <legend>Performance</legend>
+          <p class="form-hint">Performance = (Ideal Cycle Time x Total Pieces) / Run Time</p>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeePerfMethod">Calculation Method</label>
+              <select id="oeePerfMethod">
+                <option value="CYCLE_TIME">Ideal Cycle Time</option>
+                <option value="DESIGN_SPEED">Design Speed</option>
+              </select>
+            </div>
+            <div class="form-group" id="grpCycleTime">
+              <label for="oeeIdealCycle">Ideal Cycle Time (seconds)</label>
+              <input type="number" id="oeeIdealCycle" value="1" min="0.001" step="0.001">
+            </div>
+            <div class="form-group" id="grpDesignSpeed" style="display:none;">
+              <label for="oeeDesignSpeed">Design Speed (units/hour)</label>
+              <input type="number" id="oeeDesignSpeed" value="1000" min="1">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeePiecesSource">Total Pieces Source</label>
+              <select id="oeePiecesSource">
+                <option value="">-- Select Source (counter) --</option>
+              </select>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="form-fieldset">
+          <legend>Quality</legend>
+          <p class="form-hint">Quality = Good Pieces / Total Pieces</p>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeeQualityMethod">Method</label>
+              <select id="oeeQualityMethod">
+                <option value="GOOD_PIECES">Good Pieces Counter</option>
+                <option value="REJECT_PIECES">Reject Counter (auto-calc good)</option>
+                <option value="FIXED_RATIO">Fixed Ratio (%)</option>
+              </select>
+            </div>
+            <div class="form-group" id="grpGoodPieces">
+              <label for="oeeGoodSource">Good Pieces Source</label>
+              <select id="oeeGoodSource">
+                <option value="">-- Select Source --</option>
+              </select>
+            </div>
+            <div class="form-group" id="grpRejectPieces" style="display:none;">
+              <label for="oeeRejectSource">Reject Pieces Source</label>
+              <select id="oeeRejectSource">
+                <option value="">-- Select Source --</option>
+              </select>
+            </div>
+            <div class="form-group" id="grpFixedRatio" style="display:none;">
+              <label for="oeeFixedQuality">Fixed Quality (%)</label>
+              <input type="number" id="oeeFixedQuality" value="100" min="0" max="100" step="0.1">
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="form-fieldset">
+          <legend>Calculation Schedule</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeePeriod">Aggregation Period</label>
+              <select id="oeePeriod">
+                <option value="SHIFT">Per Shift</option>
+                <option value="DAY">Daily</option>
+                <option value="WEEK">Weekly</option>
+                <option value="MONTH">Monthly</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="oeeTargetDp">Result Datapoint Prefix</label>
+              <input type="text" id="oeeTargetDp" placeholder="Auto-generated if empty">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="oeeEnabled" checked> Enabled
+              </label>
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="modalOee">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save OEE Configuration</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- MODAL: DP Browser                                       -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="modalDpBrowser">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Datapoint Browser</h3>
+        <button class="modal-close" data-close="modalDpBrowser">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="dpBrowserFilter">Filter</label>
+          <input type="text" id="dpBrowserFilter" placeholder="Type to filter datapoints...">
+        </div>
+        <div class="dp-tree" id="dpBrowserTree"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="modalDpBrowser">Cancel</button>
+          <button type="button" class="btn btn-primary" id="btnDpBrowserSelect">Select</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast notifications -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Scripts -->
+  <script src="js/oabridge.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/sourceConfig.js"></script>
+  <script src="js/aggregationConfig.js"></script>
+  <script src="js/machineStateConfig.js"></script>
+  <script src="js/oeeConfig.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

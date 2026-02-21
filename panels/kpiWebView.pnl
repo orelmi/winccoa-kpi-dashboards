@@ -1,0 +1,26 @@
+V 14
+1
+LANG:10000 0
+PANEL,-1 -1 1920 1080 N "_3DFace" 0
+"main()
+{
+  // Panel script: nothing needed here,
+  // the WebView widget handles everything.
+}
+"
+0 0 0
+""
+DISPLAY_LAYER, 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0
+1
+LAYER, 0
+1
+OBJECT WebView
+  "webView_kpiConfig"
+  10 10 1900 1060
+  1
+  1 "url" "file:webview/index.html"
+  0
+  E
+  E
+  E
+  E
