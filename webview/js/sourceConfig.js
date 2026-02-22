@@ -11,7 +11,7 @@ const SourceConfig = (() => {
 
   // ── Load from persistence ───────────────────────────────────
   async function load() {
-    const data = await OABridge.loadConfig('sources');
+    const data = await KPI.loadConfig('sources');
     _sources = Array.isArray(data) ? data : [];
     render();
     _notifyChange();
@@ -19,7 +19,7 @@ const SourceConfig = (() => {
 
   // ── Save to persistence ─────────────────────────────────────
   async function save() {
-    await OABridge.saveConfig('sources', _sources);
+    await KPI.saveConfig('sources', _sources);
   }
 
   // ── Get all sources ─────────────────────────────────────────

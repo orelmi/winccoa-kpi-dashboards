@@ -1,15 +1,19 @@
 /**
  * kpiDataAccess.ctl
  * ═══════════════════════════════════════════════════════════════
- * WinCC OA CTRL — Data Access Layer
+ * WinCC OA CTRL — Domain-oriented data access layer
  *
- * ALL WinCC OA data operations are centralized here.
- * JavaScript communicates exclusively via oaJsApi.toCtrl() →
- * panel messageReceived → kpiHandleMessage().
+ * All commands are expressed in KPI domain terms.
+ * WinCC OA specifics (DP attribute paths, SQL query syntax,
+ * config DP prefix) are encapsulated here.
  *
- * Supported commands:
- *   dpGet, dpSet, dpSetTimed, dpQuery, dpNames,
- *   dpConnect, dpDisconnect, dpCreate
+ * Commands:
+ *   loadConfig, saveConfig,
+ *   browseDatapoints, datapointExists, createDatapoint,
+ *   readHistory, readOriginalHistory, readCorrectionHistory,
+ *   writeCorrection, writeCorrectionBatch,
+ *   requestRecalculation,
+ *   subscribe, unsubscribe
  *
  * Usage in panel (WebView EWO scripts):
  *   #uses "libs/kpiDataAccess"
@@ -23,8 +27,10 @@
  * ═══════════════════════════════════════════════════════════════
  */
 
-// Global reference to the WebView shape — used by dpConnect
-// callback to push value updates to JavaScript.
+// ── Constants ────────────────────────────────────────────────
+const string KPI_CONFIG_DP_PREFIX = "KPI_Config.";
+
+// Global reference to the WebView shape for subscription callbacks
 global shape g_kpiWebView;
 
 // ═══════════════════════════════════════════════════════════════
@@ -34,15 +40,11 @@ global shape g_kpiWebView;
 void kpiDataAccessInit(shape webView)
 {
   g_kpiWebView = webView;
-  DebugN("[kpiDataAccess] Initialized — WebView shape registered");
+  DebugN("[kpiDataAccess] Initialized");
 }
 
 // ═══════════════════════════════════════════════════════════════
-// Main dispatcher — called from panel messageReceived
-//
-// params: the full mapping received by messageReceived.
-//   params["params"] contains the JS-sent object with "cmd".
-//   params is passed through to msgToJs() for response routing.
+// Main dispatcher
 // ═══════════════════════════════════════════════════════════════
 
 void kpiHandleMessage(shape webView, mapping params)
@@ -50,258 +52,251 @@ void kpiHandleMessage(shape webView, mapping params)
   mapping p = params["params"];
   string cmd = p["cmd"];
 
-  if      (cmd == "dpGet")          _kpiDpGet(webView, params, p);
-  else if (cmd == "dpSet")          _kpiDpSet(webView, params, p);
-  else if (cmd == "dpSetTimed")     _kpiDpSetTimed(webView, params, p);
-  else if (cmd == "dpQuery")        _kpiDpQuery(webView, params, p);
-  else if (cmd == "dpNames")        _kpiDpNames(webView, params, p);
-  else if (cmd == "dpConnect")      _kpiDpConnect(webView, params, p);
-  else if (cmd == "dpDisconnect")   _kpiDpDisconnect(webView, params, p);
-  else if (cmd == "dpCreate")       _kpiDpCreate(webView, params, p);
+  if      (cmd == "loadConfig")           _kpiLoadConfig(webView, params, p);
+  else if (cmd == "saveConfig")           _kpiSaveConfig(webView, params, p);
+  else if (cmd == "browseDatapoints")     _kpiBrowseDatapoints(webView, params, p);
+  else if (cmd == "datapointExists")      _kpiDatapointExists(webView, params, p);
+  else if (cmd == "createDatapoint")      _kpiCreateDatapoint(webView, params, p);
+  else if (cmd == "readHistory")          _kpiReadHistory(webView, params, p, "_offline");
+  else if (cmd == "readOriginalHistory")  _kpiReadHistory(webView, params, p, "_original");
+  else if (cmd == "readCorrectionHistory") _kpiReadHistory(webView, params, p, "_corr");
+  else if (cmd == "writeCorrection")      _kpiWriteCorrection(webView, params, p);
+  else if (cmd == "writeCorrectionBatch") _kpiWriteCorrectionBatch(webView, params, p);
+  else if (cmd == "requestRecalculation") _kpiRequestRecalculation(webView, params, p);
+  else if (cmd == "subscribe")            _kpiSubscribe(webView, params, p);
+  else if (cmd == "unsubscribe")          _kpiUnsubscribe(webView, params, p);
   else
     DebugN("[kpiDataAccess] Unknown command:", cmd);
 }
 
 // ═══════════════════════════════════════════════════════════════
-// dpGet — Read datapoint value(s)
+// loadConfig — Read a KPI configuration section
 //
-// Single: { cmd:"dpGet", dp:"System1:Dp.El:_online.._value" }
-// Multi:  { cmd:"dpGet", dps:["dp1","dp2"] }
+// { cmd:"loadConfig", section:"sources" }
+// Reads KPI_Config.<section> and returns the JSON string.
 // ═══════════════════════════════════════════════════════════════
 
-void _kpiDpGet(shape ws, mapping params, mapping p)
+void _kpiLoadConfig(shape ws, mapping params, mapping p)
 {
-  if (mappingHasKey(p, "dps"))
-  {
-    dyn_string dps = p["dps"];
-    dyn_anytype values;
-    int rc;
+  string section = p["section"];
+  string dp = KPI_CONFIG_DP_PREFIX + section;
 
-    for (int i = 1; i <= dynlen(dps); i++)
-    {
-      anytype val;
-      rc = dpGet(dps[i], val);
-      if (rc != 0)
-        DebugN("[kpiDataAccess] dpGet error for", dps[i], "rc:", rc);
-      dynAppend(values, val);
-    }
-    ws.msgToJs(params, values);
-  }
-  else
-  {
-    anytype val;
-    int rc = dpGet(p["dp"], val);
-    if (rc != 0)
-      DebugN("[kpiDataAccess] dpGet error for", p["dp"], "rc:", rc);
-    ws.msgToJs(params, val);
-  }
+  anytype val;
+  int rc = dpGet(dp, val);
+  if (rc != 0)
+    DebugN("[kpiDataAccess] loadConfig error for", dp, "rc:", rc);
+
+  ws.msgToJs(params, val);
 }
 
 // ═══════════════════════════════════════════════════════════════
-// dpSet — Write datapoint value(s)
+// saveConfig — Write a KPI configuration section
 //
-// Single: { cmd:"dpSet", dp:"...", value:123 }
-// Multi:  { cmd:"dpSet", dps:["dp1","dp2"], values:[v1,v2] }
+// { cmd:"saveConfig", section:"sources", data:"[{...}]" }
 // ═══════════════════════════════════════════════════════════════
 
-void _kpiDpSet(shape ws, mapping params, mapping p)
+void _kpiSaveConfig(shape ws, mapping params, mapping p)
 {
-  int rc = 0;
+  string section = p["section"];
+  string dp = KPI_CONFIG_DP_PREFIX + section;
+  string jsonStr = p["data"];
 
-  if (mappingHasKey(p, "dps"))
-  {
-    dyn_string dps = p["dps"];
-    dyn_anytype vals = p["values"];
-
-    for (int i = 1; i <= dynlen(dps); i++)
-    {
-      rc = dpSet(dps[i], vals[i]);
-      if (rc != 0)
-        DebugN("[kpiDataAccess] dpSet error for", dps[i], "rc:", rc);
-    }
-  }
-  else
-  {
-    rc = dpSet(p["dp"], p["value"]);
-    if (rc != 0)
-      DebugN("[kpiDataAccess] dpSet error for", p["dp"], "rc:", rc);
-  }
+  int rc = dpSet(dp, jsonStr);
+  if (rc != 0)
+    DebugN("[kpiDataAccess] saveConfig error for", dp, "rc:", rc);
 
   ws.msgToJs(params, rc);
 }
 
 // ═══════════════════════════════════════════════════════════════
-// dpSetTimed — Write value(s) with a specific timestamp
-// Used for archive corrections (_corr.._value)
+// browseDatapoints — List available datapoints matching a filter
 //
-// Single: { cmd:"dpSetTimed", timestamp:"ISO", dp:"...", value:v }
-// Multi:  { cmd:"dpSetTimed", timestamp:"ISO", dps:[...], values:[...] }
+// { cmd:"browseDatapoints", filter:"Plant" }
 // ═══════════════════════════════════════════════════════════════
 
-void _kpiDpSetTimed(shape ws, mapping params, mapping p)
+void _kpiBrowseDatapoints(shape ws, mapping params, mapping p)
 {
-  time ts = _kpiParseISOTime(p["timestamp"]);
-  int rc = 0;
+  string filter = p["filter"];
+  string pattern;
 
-  if (mappingHasKey(p, "dps"))
-  {
-    dyn_string dps = p["dps"];
-    dyn_anytype vals = p["values"];
-
-    for (int i = 1; i <= dynlen(dps); i++)
-    {
-      rc = dpSetTimed(ts, dps[i], vals[i]);
-      if (rc != 0)
-        DebugN("[kpiDataAccess] dpSetTimed error for", dps[i], "rc:", rc);
-    }
-  }
+  if (filter != "")
+    pattern = "*" + filter + "*";
   else
-  {
-    rc = dpSetTimed(ts, p["dp"], p["value"]);
-    if (rc != 0)
-      DebugN("[kpiDataAccess] dpSetTimed error for", p["dp"], "rc:", rc);
-  }
+    pattern = "*";
+
+  dyn_string names = dpNames(pattern, "");
+  ws.msgToJs(params, names);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// datapointExists — Check if a datapoint exists
+//
+// { cmd:"datapointExists", dp:"System1:Plant.Water.Counter" }
+// Returns true/false
+// ═══════════════════════════════════════════════════════════════
+
+void _kpiDatapointExists(shape ws, mapping params, mapping p)
+{
+  string dp = p["dp"];
+  dyn_string names = dpNames(dp, "");
+  bool exists = (dynlen(names) > 0);
+  ws.msgToJs(params, exists);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// createDatapoint — Create a new datapoint
+//
+// { cmd:"createDatapoint", name:"MyDp", type:"KPI_Config" }
+// ═══════════════════════════════════════════════════════════════
+
+void _kpiCreateDatapoint(shape ws, mapping params, mapping p)
+{
+  string dpName = p["name"];
+  string dpTypeName = p["type"];
+
+  int typeId = dpTypeId(dpTypeName);
+  int rc = dpCreate(dpName, typeId);
+  if (rc != 0)
+    DebugN("[kpiDataAccess] createDatapoint error for", dpName, "rc:", rc);
 
   ws.msgToJs(params, rc);
 }
 
 // ═══════════════════════════════════════════════════════════════
-// dpQuery — Execute SQL-like query
+// readHistory / readOriginalHistory / readCorrectionHistory
 //
-// { cmd:"dpQuery", query:"SELECT ... FROM ... WHERE ..." }
-// Returns: dyn_dyn_anytype (2D array: row 0 = headers)
+// { cmd:"readHistory", dp:"System1:Dp", startTime:"ISO", endTime:"ISO" }
+//
+// Builds the dpQuery with TIMERANGE using the specified attribute
+// config (_offline, _original, or _corr).
+// Returns raw dpQuery result (2D array).
+// JS parses into [{value, time}].
 // ═══════════════════════════════════════════════════════════════
 
-void _kpiDpQuery(shape ws, mapping params, mapping p)
+void _kpiReadHistory(shape ws, mapping params, mapping p, string attrConfig)
 {
-  string query = p["query"];
+  string dp = p["dp"];
+  time tStart = _kpiParseISOTime(p["startTime"]);
+  time tEnd = _kpiParseISOTime(p["endTime"]);
+
+  string tStartStr = formatTime("%Y.%m.%d %H:%M:%S", tStart);
+  string tEndStr = formatTime("%Y.%m.%d %H:%M:%S", tEnd);
+
+  string query = "SELECT '" + attrConfig + ".._value', '" + attrConfig + ".._stime' FROM '" +
+    dp + "' TIMERANGE(\"" + tStartStr + "\",\"" + tEndStr + "\",1,0)";
+
   dyn_dyn_anytype result;
-
   int rc = dpQuery(query, result);
   if (rc != 0)
-    DebugN("[kpiDataAccess] dpQuery error, rc:", rc, "query:", query);
+    DebugN("[kpiDataAccess] readHistory error, rc:", rc, "query:", query);
 
   ws.msgToJs(params, result);
 }
 
 // ═══════════════════════════════════════════════════════════════
-// dpNames — List datapoint names matching a pattern
+// writeCorrection — Write a corrected value at a specific time
 //
-// { cmd:"dpNames", pattern:"System1:Plant.*", dpType:"" }
-// Returns: dyn_string
+// { cmd:"writeCorrection", dp:"System1:Dp", timestamp:"ISO", value:123.45 }
+// Appends :_corr.._value and calls dpSetTimed.
 // ═══════════════════════════════════════════════════════════════
 
-void _kpiDpNames(shape ws, mapping params, mapping p)
+void _kpiWriteCorrection(shape ws, mapping params, mapping p)
 {
-  string pattern = p["pattern"];
-  string dpType  = "";
+  string dp = p["dp"];
+  time ts = _kpiParseISOTime(p["timestamp"]);
+  anytype val = p["value"];
 
-  if (mappingHasKey(p, "dpType"))
-    dpType = p["dpType"];
-
-  dyn_string names = dpNames(pattern, dpType);
-  ws.msgToJs(params, names);
-}
-
-// ═══════════════════════════════════════════════════════════════
-// dpCreate — Create a new datapoint
-//
-// { cmd:"dpCreate", dpName:"MyDp", dpType:"KPI_Config" }
-// ═══════════════════════════════════════════════════════════════
-
-void _kpiDpCreate(shape ws, mapping params, mapping p)
-{
-  string dpName    = p["dpName"];
-  string dpTypeName = p["dpType"];
-
-  int typeId = dpTypeId(dpTypeName);
-  int rc = dpCreate(dpName, typeId);
+  string corrDp = dp + ":_corr.._value";
+  int rc = dpSetTimed(ts, corrDp, val);
   if (rc != 0)
-    DebugN("[kpiDataAccess] dpCreate error for", dpName, "type:", dpTypeName, "rc:", rc);
+    DebugN("[kpiDataAccess] writeCorrection error for", corrDp, "rc:", rc);
 
   ws.msgToJs(params, rc);
 }
 
 // ═══════════════════════════════════════════════════════════════
-// dpConnect — Subscribe to live value changes
+// writeCorrectionBatch — Write multiple corrections at one time
 //
-// { cmd:"dpConnect", dp:"System1:Dp.El:_online.._value", answer:false }
-// { cmd:"dpConnect", dps:["dp1","dp2"], answer:true }
-//
-// The CTRL-side dpConnect callback pushes each update to
-// JavaScript via execJsFunction("_oaBridgeDpUpdate", dp, value).
-// The JS side maintains a subscription map and dispatches to
-// the correct callback.
+// { cmd:"writeCorrectionBatch", timestamp:"ISO", dps:["dp1","dp2"], values:[v1,v2] }
 // ═══════════════════════════════════════════════════════════════
 
-void _kpiDpConnect(shape ws, mapping params, mapping p)
+void _kpiWriteCorrectionBatch(shape ws, mapping params, mapping p)
 {
-  bool answer = false;
-  if (mappingHasKey(p, "answer"))
-    answer = p["answer"];
+  time ts = _kpiParseISOTime(p["timestamp"]);
+  dyn_string dps = p["dps"];
+  dyn_anytype vals = p["values"];
+  int rc = 0;
 
-  if (mappingHasKey(p, "dps"))
+  for (int i = 1; i <= dynlen(dps); i++)
   {
-    dyn_string dps = p["dps"];
-    for (int i = 1; i <= dynlen(dps); i++)
-    {
-      dpConnect("_kpiDpConnCallback", answer, dps[i]);
-    }
-  }
-  else
-  {
-    dpConnect("_kpiDpConnCallback", answer, p["dp"]);
+    string corrDp = dps[i] + ":_corr.._value";
+    rc = dpSetTimed(ts, corrDp, vals[i]);
+    if (rc != 0)
+      DebugN("[kpiDataAccess] writeCorrectionBatch error for", corrDp, "rc:", rc);
   }
 
+  ws.msgToJs(params, rc);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// requestRecalculation — Trigger KPI recalculation
+//
+// { cmd:"requestRecalculation", request:{sourceId, sourceDp, ...} }
+// Writes the request as JSON to KPI_Config.recalcRequest.
+// The CTRL engines (aggregation + OEE) monitor this DP.
+// ═══════════════════════════════════════════════════════════════
+
+void _kpiRequestRecalculation(shape ws, mapping params, mapping p)
+{
+  mapping request = p["request"];
+  request["requestTime"] = formatTime("%Y-%m-%dT%H:%M:%S", getCurrentTime());
+
+  string jsonStr;
+  jsonEncode(request, jsonStr);
+
+  string dp = KPI_CONFIG_DP_PREFIX + "recalcRequest";
+  int rc = dpSet(dp, jsonStr);
+  if (rc != 0)
+    DebugN("[kpiDataAccess] requestRecalculation error, rc:", rc);
+
+  ws.msgToJs(params, rc);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// subscribe — Subscribe to live value changes
+//
+// { cmd:"subscribe", dp:"System1:Dp.El:_online.._value" }
+// Pushes updates to JS via execJsFunction("_kpiDpUpdate").
+// ═══════════════════════════════════════════════════════════════
+
+void _kpiSubscribe(shape ws, mapping params, mapping p)
+{
+  string dp = p["dp"];
+  dpConnect("_kpiSubscriptionCallback", false, dp);
   ws.msgToJs(params, 0);
 }
 
-// ── dpConnect callback — fires on every value change ─────────
-// Pushes the update to JavaScript via execJsFunction.
-// The JS global function _oaBridgeDpUpdate(dp, value) routes
-// the value to the registered callback.
-
-void _kpiDpConnCallback(string dp, anytype val)
+void _kpiSubscriptionCallback(string dp, anytype val)
 {
   if (g_kpiWebView)
-  {
-    g_kpiWebView.execJsFunction("_oaBridgeDpUpdate", dp, val);
-  }
-  else
-  {
-    DebugN("[kpiDataAccess] WARNING: dpConnect callback fired but no WebView shape registered");
-  }
+    g_kpiWebView.execJsFunction("_kpiDpUpdate", dp, val);
 }
 
 // ═══════════════════════════════════════════════════════════════
-// dpDisconnect — Unsubscribe from live value changes
+// unsubscribe — Cancel a live subscription
 //
-// { cmd:"dpDisconnect", dp:"System1:Dp.El:_online.._value" }
-// { cmd:"dpDisconnect", dps:["dp1","dp2"] }
+// { cmd:"unsubscribe", dp:"System1:Dp.El:_online.._value" }
 // ═══════════════════════════════════════════════════════════════
 
-void _kpiDpDisconnect(shape ws, mapping params, mapping p)
+void _kpiUnsubscribe(shape ws, mapping params, mapping p)
 {
-  if (mappingHasKey(p, "dps"))
-  {
-    dyn_string dps = p["dps"];
-    for (int i = 1; i <= dynlen(dps); i++)
-    {
-      dpDisconnect("_kpiDpConnCallback", dps[i]);
-    }
-  }
-  else
-  {
-    dpDisconnect("_kpiDpConnCallback", p["dp"]);
-  }
-
+  string dp = p["dp"];
+  dpDisconnect("_kpiSubscriptionCallback", dp);
   ws.msgToJs(params, 0);
 }
 
 // ═══════════════════════════════════════════════════════════════
 // Internal — Parse ISO 8601 timestamp to WinCC OA time
-// Input:  "2024-01-15T10:30:00.000Z"
-// Output: time object
 // ═══════════════════════════════════════════════════════════════
 
 time _kpiParseISOTime(string isoStr)

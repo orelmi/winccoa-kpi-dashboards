@@ -11,14 +11,14 @@ const MachineStateConfig = (() => {
 
   // ── Persistence ─────────────────────────────────────────────
   async function load() {
-    const data = await OABridge.loadConfig('machines');
+    const data = await KPI.loadConfig('machines');
     _machines = Array.isArray(data) ? data : [];
     render();
     _notifyChange();
   }
 
   async function save() {
-    await OABridge.saveConfig('machines', _machines);
+    await KPI.saveConfig('machines', _machines);
   }
 
   function getAll() { return _machines.slice(); }

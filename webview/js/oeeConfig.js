@@ -10,13 +10,13 @@ const OeeConfig = (() => {
 
   // ── Persistence ─────────────────────────────────────────────
   async function load() {
-    const data = await OABridge.loadConfig('oee');
+    const data = await KPI.loadConfig('oee');
     _oeeConfigs = Array.isArray(data) ? data : [];
     render();
   }
 
   async function save() {
-    await OABridge.saveConfig('oee', _oeeConfigs);
+    await KPI.saveConfig('oee', _oeeConfigs);
   }
 
   function getAll() { return _oeeConfigs.slice(); }

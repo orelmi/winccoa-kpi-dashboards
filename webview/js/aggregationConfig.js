@@ -10,13 +10,13 @@ const AggregationConfig = (() => {
 
   // ── Persistence ─────────────────────────────────────────────
   async function load() {
-    const data = await OABridge.loadConfig('aggregations');
+    const data = await KPI.loadConfig('aggregations');
     _aggregations = Array.isArray(data) ? data : [];
     render();
   }
 
   async function save() {
-    await OABridge.saveConfig('aggregations', _aggregations);
+    await KPI.saveConfig('aggregations', _aggregations);
   }
 
   function getAll() { return _aggregations.slice(); }

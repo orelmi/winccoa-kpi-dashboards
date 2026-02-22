@@ -87,7 +87,7 @@ const App = (() => {
     tree.innerHTML = '<p style="color:#6b7c8e;padding:8px;">Loading...</p>';
 
     try {
-      const dps = await OABridge.browseDatapoints(filter);
+      const dps = await KPI.browseDatapoints(filter);
       if (dps.length === 0) {
         tree.innerHTML = '<p style="color:#6b7c8e;padding:8px;">No datapoints found.</p>';
         return;
@@ -133,7 +133,7 @@ const App = (() => {
   // ── Boot ────────────────────────────────────────────────────
   function init() {
     // Initialize OA bridge
-    const mode = OABridge.init();
+    const mode = KPI.init();
     updateConnectionStatus(mode);
 
     // Initialize UI components

@@ -111,7 +111,7 @@ const OeeAnalysis = (() => {
 
   // ── Query archive history (live or mock) ────────────────────
   async function _queryStateHistory(dp, startDate, endDate) {
-    if (OABridge.getMode() === 'live') {
+    if (KPI.getMode() === 'live') {
       return _queryLiveHistory(dp, startDate, endDate);
     } else {
       return _generateMockHistory(dp, startDate, endDate);
@@ -119,22 +119,10 @@ const OeeAnalysis = (() => {
   }
 
   async function _queryLiveHistory(dp, startDate, endDate) {
-    const fmt = (d) => {
-      const pad = (n) => String(n).padStart(2, '0');
-      return d.getFullYear() + '.' + pad(d.getMonth() + 1) + '.' + pad(d.getDate()) + ' ' +
-             pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
-    };
-
-    const query = "SELECT '_offline.._value', '_offline.._stime' FROM '" + dp +
-                  "' TIMERANGE(\"" + fmt(startDate) + "\",\"" + fmt(endDate) + "\",1,0)";
-
-    const result = await OABridge.dpQuery(query);
-    if (!result || result.length < 2) return [];
-
-    // result[0] is header, rest is data
-    return result.slice(1).map(row => ({
-      value: String(row[0]),
-      time: row[1] instanceof Date ? row[1] : new Date(row[1]),
+    const entries = await KPI.readHistory(dp, startDate, endDate);
+    return entries.map(entry => ({
+      value: String(entry.value),
+      time: entry.time instanceof Date ? entry.time : new Date(entry.time),
     }));
   }
 
@@ -423,7 +411,7 @@ const OeeAnalysis = (() => {
   function _getCounterDelta(history) {
     if (!history || history.length < 2) return 0;
     // For mock mode, generate a plausible counter
-    if (OABridge.getMode() === 'mock') {
+    if (KPI.getMode() === 'mock') {
       const durationH = (history[history.length - 1].time.getTime() - history[0].time.getTime()) / 3600000;
       return Math.round(durationH * (200 + Math.random() * 300)); // ~200-500 pieces/h
     }

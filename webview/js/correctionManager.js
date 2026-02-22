@@ -59,7 +59,7 @@ const CorrectionManager = (() => {
     try {
       let rows = [];
 
-      if (OABridge.getMode() === 'live') {
+      if (KPI.getMode() === 'live') {
         rows = await _loadLiveHistory(_currentDp, tStart, tEnd);
       } else {
         rows = _loadMockHistory(_currentDp, tStart, tEnd);
@@ -93,44 +93,33 @@ const CorrectionManager = (() => {
 
   // ── Live mode: query _original and _corr in parallel ────────
   async function _loadLiveHistory(dp, tStart, tEnd) {
-    const [origResult, corrResult] = await Promise.all([
-      OABridge.queryOriginalValues(dp, tStart, tEnd),
-      OABridge.queryCorrectionValues(dp, tStart, tEnd),
+    const [origEntries, corrEntries] = await Promise.all([
+      KPI.readOriginalHistory(dp, tStart, tEnd),
+      KPI.readCorrectionHistory(dp, tStart, tEnd),
     ]);
 
     // Build map of corrections by timestamp
     const corrMap = {};
-    if (corrResult && corrResult.length > 1) {
-      for (let i = 1; i < corrResult.length; i++) {
-        const t = corrResult[i][1];
-        const key = t instanceof Date ? t.getTime() : new Date(t).getTime();
-        corrMap[key] = corrResult[i][0];
-      }
-    }
+    corrEntries.forEach(entry => {
+      const key = entry.time instanceof Date ? entry.time.getTime() : new Date(entry.time).getTime();
+      corrMap[key] = entry.value;
+    });
 
-    const rows = [];
-    if (origResult && origResult.length > 1) {
-      for (let i = 1; i < origResult.length; i++) {
-        const origVal = origResult[i][0];
-        const t = origResult[i][1];
-        const tObj = t instanceof Date ? t : new Date(t);
-        const tKey = tObj.getTime();
-
-        rows.push({
-          time: tObj,
-          original: origVal,
-          corrected: corrMap[tKey] !== undefined ? corrMap[tKey] : null,
-        });
-      }
-    }
-
-    return rows;
+    return origEntries.map(entry => {
+      const tObj = entry.time instanceof Date ? entry.time : new Date(entry.time);
+      const tKey = tObj.getTime();
+      return {
+        time: tObj,
+        original: entry.value,
+        corrected: corrMap[tKey] !== undefined ? corrMap[tKey] : null,
+      };
+    });
   }
 
   // ── Mock mode: generate plausible original + any saved corrections
   function _loadMockHistory(dp, tStart, tEnd) {
     const rows = [];
-    const corrections = OABridge.getCorrections(dp);
+    const corrections = KPI.getCorrections(dp);
     const corrMap = {};
     corrections.forEach(c => { corrMap[c.time] = c.value; });
 
@@ -184,7 +173,7 @@ const CorrectionManager = (() => {
     }
 
     try {
-      await OABridge.writeCorrection(_currentDp, timestamp, value);
+      await KPI.writeCorrection(_currentDp, timestamp, value);
       Utils.toast('Correction applied at ' + _fmtTime(timestamp), 'success');
       loadHistory(); // Refresh
     } catch (err) {
@@ -224,19 +213,14 @@ const CorrectionManager = (() => {
         return;
       }
 
-      // In live mode: write recalc request to DP
-      // Both CTRL engines (aggregation + OEE) monitor this DP
-      if (OABridge.getMode() === 'live') {
-        const recalcRequest = JSON.stringify({
-          sourceId: _currentSourceId,
-          sourceDp: _currentDp,
-          periodStart: tStart.toISOString(),
-          periodEnd: tEnd.toISOString(),
-          aggregationIds: affectedAggs.map(a => a.id),
-          requestTime: new Date().toISOString(),
-        });
-        await OABridge.dpSet('KPI_Config.recalcRequest', recalcRequest);
-      }
+      // Request KPI recalculation via CTRL engines
+      await KPI.requestRecalculation({
+        sourceId: _currentSourceId,
+        sourceDp: _currentDp,
+        periodStart: tStart.toISOString(),
+        periodEnd: tEnd.toISOString(),
+        aggregationIds: affectedAggs.map(a => a.id),
+      });
 
       // Build status display
       let details = '';

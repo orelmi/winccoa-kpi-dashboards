@@ -77,7 +77,7 @@ webview/
 ├── index.html            # Main page (Single Page App)
 ├── css/style.css         # Industrial theme
 └── js/
-    ├── oabridge.js       # Message-based abstraction layer + mock mode
+    ├── kpi.js            # Domain-oriented data access + mock mode
     ├── utils.js          # Helpers, constants, formatting
     ├── sourceConfig.js   # Data source configuration
     ├── aggregationConfig.js  # KPI aggregation configuration
@@ -88,7 +88,7 @@ webview/
     └── app.js            # Entry point, tabs, DP browser
 
 scripts/libs/
-├── kpiDataAccess.ctl         # CTRL data access layer (all DP operations)
+├── kpiDataAccess.ctl         # CTRL data access layer (domain commands)
 ├── kpiAggregationEngine.ctl  # Aggregation calculation engine
 └── kpiOeeEngine.ctl          # OEE calculation engine + downtime analysis
 
@@ -251,77 +251,71 @@ The system integrates the WinCC OA archive correction mechanism:
 
 ## Data Access Architecture
 
-JavaScript does **not** call `oaJsApi` functions directly. All data operations go through the CTRL message mechanism:
+The interface is **domain-oriented**: JavaScript operates with KPI concepts (configs, history, corrections, recalculation), not WinCC OA primitives (dpGet, dpSet, dpQuery). All WinCC OA specifics (DP attribute paths, SQL query syntax, config DP prefix) are encapsulated in the CTRL data access layer.
 
 ```
-JS (oabridge.js)                    CTRL (kpiDataAccess.ctl)
-─────────────────                   ────────────────────────
-OABridge.dpGet(dp)
-  → oaJsApi.toCtrl({cmd:"dpGet"})
-    → messageReceived(params)
-      → kpiHandleMessage(this, params)
-        → dpGet(dp, val)
-          → ws.msgToJs(params, val)
-            → success(val)
-              → Promise resolves
+JS (kpi.js)                         CTRL (kpiDataAccess.ctl)
+───────────                         ────────────────────────
+KPI.loadConfig("sources")
+  → toCtrl({cmd:"loadConfig"})
+    → dpGet("KPI_Config.sources", val)
+      → msgToJs(params, val)
+
+KPI.readHistory(dp, t1, t2)
+  → toCtrl({cmd:"readHistory"})
+    → dpQuery("SELECT '_offline.._value'... TIMERANGE(...)")
+      → msgToJs(params, result)
+
+KPI.writeCorrection(dp, ts, val)
+  → toCtrl({cmd:"writeCorrection"})
+    → dpSetTimed(ts, dp + ":_corr.._value", val)
+      → msgToJs(params, rc)
 ```
 
-For `dpConnect` subscriptions, the CTRL side pushes updates to JS via `execJsFunction`:
-
-```
-JS                                  CTRL
-──                                  ────
-OABridge.dpConnect(dp, callback)
-  → toCtrl({cmd:"dpConnect"})
-    → dpConnect("_kpiDpConnCallback", dp)
-
-            (on each value change)
-            _kpiDpConnCallback(dp, val)
-              → execJsFunction("_oaBridgeDpUpdate", dp, val)
-                → window._oaBridgeDpUpdate dispatches to callback
-```
-
-### OABridge API (JavaScript)
+### KPI API (JavaScript)
 
 ```javascript
-// Read a DP value
-OABridge.dpGet("KPI_Config.sources").then(value => { ... });
+// Configuration
+KPI.loadConfig("sources").then(data => { ... });
+KPI.saveConfig("sources", configArray);
 
-// Write a DP value
-OABridge.dpSet("KPI_Config.sources", jsonString);
+// Datapoint browsing
+KPI.browseDatapoints("Plant.*");
 
-// SQL-like query
-OABridge.dpQuery("SELECT '_online.._value' FROM '*'");
+// Archive history — returns [{value, time}, ...]
+KPI.readHistory(dp, tStart, tEnd);
+KPI.readOriginalHistory(dp, tStart, tEnd);
+KPI.readCorrectionHistory(dp, tStart, tEnd);
 
-// Browse datapoints
-OABridge.browseDatapoints("Plant.*");
+// Archive correction
+KPI.writeCorrection(dp, timestamp, 123.45);
 
-// Real-time subscription
-OABridge.dpConnect("System1:Plant.Water.Counter:_online.._value", (value) => { ... });
+// KPI recalculation
+KPI.requestRecalculation({ sourceId, periodStart, periodEnd, ... });
 
-// Archive value correction (dpSetTimed)
-OABridge.writeCorrection("System1:Plant.Water.Counter", timestamp, 123.45);
-
-// Read original vs corrected archive
-OABridge.queryOriginalValues(dp, tStart, tEnd);
-OABridge.queryCorrectionValues(dp, tStart, tEnd);
+// Live monitoring
+const handle = KPI.subscribe(dp, value => { ... });
+KPI.unsubscribe(handle);
 ```
 
 ### CTRL Commands (kpiDataAccess.ctl)
 
-All commands are sent as `{cmd: "...", ...}` via `oaJsApi.toCtrl()`:
+| Domain Command | CTRL Implementation | Description |
+|----------------|---------------------|-------------|
+| `loadConfig` | `dpGet("KPI_Config." + section)` | Load KPI configuration |
+| `saveConfig` | `dpSet("KPI_Config." + section, json)` | Save KPI configuration |
+| `browseDatapoints` | `dpNames("*" + filter + "*")` | List available datapoints |
+| `datapointExists` | `dpNames(dp)` + length check | Check DP existence |
+| `createDatapoint` | `dpCreate(name, typeId)` | Create new datapoint |
+| `readHistory` | `dpQuery(SELECT _offline.. TIMERANGE)` | Read effective archive |
+| `readOriginalHistory` | `dpQuery(SELECT _original.. TIMERANGE)` | Read original archive |
+| `readCorrectionHistory` | `dpQuery(SELECT _corr.. TIMERANGE)` | Read correction archive |
+| `writeCorrection` | `dpSetTimed(ts, dp:_corr.._value, val)` | Write archive correction |
+| `writeCorrectionBatch` | Multiple `dpSetTimed()` | Batch corrections |
+| `requestRecalculation` | `dpSet("KPI_Config.recalcRequest", json)` | Trigger KPI recalc |
+| `subscribe` | `dpConnect()` + `execJsFunction()` | Live value subscription |
+| `unsubscribe` | `dpDisconnect()` | Cancel subscription |
 
-| Command | CTRL Function | Description |
-|---------|---------------|-------------|
-| `dpGet` | `dpGet()` | Read DP value (single or array) |
-| `dpSet` | `dpSet()` | Write DP value (single or array) |
-| `dpSetTimed` | `dpSetTimed()` | Write with timestamp (archive correction) |
-| `dpQuery` | `dpQuery()` | SQL-like query |
-| `dpNames` | `dpNames()` | List DPs matching pattern |
-| `dpConnect` | `dpConnect()` | Subscribe to value changes |
-| `dpDisconnect` | `dpDisconnect()` | Unsubscribe |
-| `dpCreate` | `dpCreate()` | Create new datapoint |
+JavaScript never touches WinCC OA attribute paths, SQL syntax, or DP naming conventions. The CTRL layer is the single source of truth for all WinCC OA integration details.
 
-The only `oaJsApi` function called from JavaScript is **`toCtrl()`**. All WinCC OA data operations are executed in the CTRL data access layer.
-
-In simulation mode (outside WinCC OA), all calls are intercepted and replaced by a mock using `localStorage`.
+In simulation mode, all calls are handled by a mock layer using `localStorage`.
