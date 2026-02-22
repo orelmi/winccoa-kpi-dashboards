@@ -1,11 +1,22 @@
 /* ═══════════════════════════════════════════════════════════════
-   oabridge.js — Abstraction layer for WinCC OA oaJsApi
+   oabridge.js — Abstraction layer for WinCC OA data access
    Provides a unified Promise-based interface with automatic
    mock/simulation mode when oaJsApi is not available.
 
-   In live mode (loaded via loadSnippet in WebView EWO), uses the
-   oaJsApi library with its {success, error} callback pattern.
-   See: https://www.winccoa.com/documentation/WinCCOA/3.18/en_US/oaJsApi/oaJsApi.html
+   ARCHITECTURE:
+     JavaScript does NOT call oaJsApi functions directly.
+     All data operations go through the message mechanism:
+
+       JS  →  oaJsApi.toCtrl({cmd, ...})
+            →  panel messageReceived
+            →  kpiDataAccess.ctl (CTRL data access layer)
+            →  msgToJs / execJsFunction  →  JS
+
+     The only oaJsApi function called from JavaScript is toCtrl().
+
+   For dpConnect subscriptions, the CTRL side pushes updates via
+   execJsFunction("_oaBridgeDpUpdate", dp, value). A global JS
+   function dispatches to the registered callback.
 
    Archive correction model:
      _original.._value   — raw archived value (written by archiving)
@@ -28,11 +39,39 @@ const OABridge = (() => {
   let _mockCorrections = {}; // dp -> [{time, value}, ...]
   let _connectCallbacks = [];
 
+  // ── dpConnect subscription registry ────────────────────────
+  // Maps DP name → callback function.
+  // In live mode, the CTRL side pushes updates via
+  // execJsFunction("_oaBridgeDpUpdate", dp, value).
+  const _dpSubscriptions = {};
+
+  // Global function called by CTRL via WebView.execJsFunction()
+  // when a subscribed DP value changes.
+  window._oaBridgeDpUpdate = function(dp, value) {
+    const cb = _dpSubscriptions[dp];
+    if (cb) {
+      cb(value);
+    }
+  };
+
+  // ── Send command to CTRL ───────────────────────────────────
+  // Single gateway: all live-mode calls go through here.
+  function _sendToCtrl(cmdObj) {
+    return new Promise((resolve, reject) => {
+      oaJsApi.toCtrl(cmdObj, {
+        success: function(data) { resolve(data); },
+        error: function() {
+          reject(new Error('[OABridge] toCtrl failed: ' + cmdObj.cmd));
+        }
+      });
+    });
+  }
+
   // ── Initialize ──────────────────────────────────────────────
   function init() {
     if (isOaJsAvailable()) {
       _mode = 'live';
-      console.log('[OABridge] Connected to WinCC OA via oaJsApi');
+      console.log('[OABridge] Connected to WinCC OA — all calls via toCtrl');
     } else {
       _mode = 'mock';
       _initMockData();
@@ -50,33 +89,19 @@ const OABridge = (() => {
 
   // ══════════════════════════════════════════════════════════════
   // dpGet — Read a value from a datapoint
-  //
-  // oaJsApi.dpGet(dpeName, {success(data), error()})
+  // CTRL handler: dpGet(dp, val) → msgToJs(params, val)
   // ══════════════════════════════════════════════════════════════
   function dpGet(dp) {
-    return new Promise((resolve, reject) => {
-      if (_mode === 'live') {
-        oaJsApi.dpGet(dp, {
-          success: function(data) { resolve(data); },
-          error: function() { reject(new Error('dpGet failed: ' + dp)); }
-        });
-      } else {
-        resolve(_mockStore[dp] !== undefined ? _mockStore[dp] : null);
-      }
-    });
+    if (_mode === 'live') {
+      return _sendToCtrl({ cmd: 'dpGet', dp: dp });
+    }
+    return Promise.resolve(_mockStore[dp] !== undefined ? _mockStore[dp] : null);
   }
 
-  // ── dpGetMultiple — Read multiple DPs ───────────────────────
-  // oaJsApi.dpGet supports arrays natively:
-  // oaJsApi.dpGet([dp1, dp2], {success(data)}) — data is array
+  // ── dpGetMultiple — Read multiple DPs in one round-trip ────
   function dpGetMultiple(dps) {
     if (_mode === 'live') {
-      return new Promise((resolve, reject) => {
-        oaJsApi.dpGet(dps, {
-          success: function(data) { resolve(data); },
-          error: function() { reject(new Error('dpGetMultiple failed')); }
-        });
-      });
+      return _sendToCtrl({ cmd: 'dpGet', dps: dps });
     }
     const result = dps.map(dp => _mockStore[dp] !== undefined ? _mockStore[dp] : null);
     return Promise.resolve(result);
@@ -84,35 +109,23 @@ const OABridge = (() => {
 
   // ══════════════════════════════════════════════════════════════
   // dpSet — Write a value to a datapoint
-  //
-  // oaJsApi.dpSet(dpeName, value, {success(), error()})
+  // CTRL handler: dpSet(dp, value) → msgToJs(params, rc)
   // ══════════════════════════════════════════════════════════════
   function dpSet(dp, value) {
-    return new Promise((resolve, reject) => {
-      if (_mode === 'live') {
-        oaJsApi.dpSet(dp, value, {
-          success: function() { resolve(); },
-          error: function() { reject(new Error('dpSet failed: ' + dp)); }
-        });
-      } else {
-        _mockStore[dp] = value;
-        resolve();
-      }
-    });
+    if (_mode === 'live') {
+      return _sendToCtrl({ cmd: 'dpSet', dp: dp, value: value });
+    }
+    _mockStore[dp] = value;
+    return Promise.resolve();
   }
 
-  // ── dpSetMultiple — Write multiple DPs ──────────────────────
-  // oaJsApi.dpSet supports arrays natively:
-  // oaJsApi.dpSet([dp1, dp2], [val1, val2], {success, error})
+  // ── dpSetMultiple — Write multiple DPs in one round-trip ───
   function dpSetMultiple(dpValuePairs) {
     if (_mode === 'live') {
-      const dps = dpValuePairs.map(p => p[0]);
-      const vals = dpValuePairs.map(p => p[1]);
-      return new Promise((resolve, reject) => {
-        oaJsApi.dpSet(dps, vals, {
-          success: function() { resolve(); },
-          error: function() { reject(new Error('dpSetMultiple failed')); }
-        });
+      return _sendToCtrl({
+        cmd: 'dpSet',
+        dps: dpValuePairs.map(p => p[0]),
+        values: dpValuePairs.map(p => p[1])
       });
     }
     dpValuePairs.forEach(p => { _mockStore[p[0]] = p[1]; });
@@ -122,29 +135,18 @@ const OABridge = (() => {
   // ══════════════════════════════════════════════════════════════
   // dpSetTimed — Write a value at a specific timestamp
   // Used for archive corrections: writes to _corr.._value
-  //
-  // dpSetTimed is NOT available in oaJsApi. In live mode we
-  // delegate to the panel CTRL script via oaJsApi.toCtrl().
-  // The panel's messageReceived handler calls the real
-  // CTRL dpSetTimed(time, dp, value).
+  // CTRL handler: dpSetTimed(ts, dp, val) → msgToJs(params, rc)
   // ══════════════════════════════════════════════════════════════
   function dpSetTimed(timestamp, dp, value) {
     if (_mode === 'live') {
-      return new Promise((resolve, reject) => {
-        const ts = timestamp instanceof Date
-          ? timestamp.toISOString()
-          : String(timestamp);
-        oaJsApi.toCtrl({
-          cmd: 'dpSetTimed',
-          timestamp: ts,
-          dp: dp,
-          value: value
-        }, {
-          success: function() { resolve(); },
-          error: function() {
-            reject(new Error('dpSetTimed failed (toCtrl): ' + dp));
-          }
-        });
+      const ts = timestamp instanceof Date
+        ? timestamp.toISOString()
+        : String(timestamp);
+      return _sendToCtrl({
+        cmd: 'dpSetTimed',
+        timestamp: ts,
+        dp: dp,
+        value: value
       });
     }
     // Mock: store correction
@@ -161,11 +163,18 @@ const OABridge = (() => {
     return Promise.resolve();
   }
 
-  // ── dpSetTimedMultiple — Multiple timed writes ──────────────
-  // Delegates each write to dpSetTimed (via toCtrl).
+  // ── dpSetTimedMultiple — Multiple timed writes in one call ──
   function dpSetTimedMultiple(timestamp, dpValuePairs) {
     if (_mode === 'live') {
-      return Promise.all(dpValuePairs.map(p => dpSetTimed(timestamp, p[0], p[1])));
+      const ts = timestamp instanceof Date
+        ? timestamp.toISOString()
+        : String(timestamp);
+      return _sendToCtrl({
+        cmd: 'dpSetTimed',
+        timestamp: ts,
+        dps: dpValuePairs.map(p => p[0]),
+        values: dpValuePairs.map(p => p[1])
+      });
     }
     dpValuePairs.forEach(p => {
       const key = p[0].replace(':_corr.._value', '').replace(':_offline.._value', '');
@@ -192,20 +201,13 @@ const OABridge = (() => {
 
   // ══════════════════════════════════════════════════════════════
   // dpQuery — Execute a SQL-like DP query
-  //
-  // oaJsApi.dpQuery(queryString, {success(data), error()})
+  // CTRL handler: dpQuery(query, result) → msgToJs(params, result)
   // ══════════════════════════════════════════════════════════════
   function dpQuery(query) {
-    return new Promise((resolve, reject) => {
-      if (_mode === 'live') {
-        oaJsApi.dpQuery(query, {
-          success: function(data) { resolve(data); },
-          error: function() { reject(new Error('dpQuery failed')); }
-        });
-      } else {
-        resolve(_mockQuery(query));
-      }
-    });
+    if (_mode === 'live') {
+      return _sendToCtrl({ cmd: 'dpQuery', query: query });
+    }
+    return Promise.resolve(_mockQuery(query));
   }
 
   // ── queryOriginalValues — Query _original archive only ──────
@@ -235,43 +237,48 @@ const OABridge = (() => {
   // ══════════════════════════════════════════════════════════════
   // dpConnect — Subscribe to value changes (hotlink)
   //
-  // oaJsApi.dpConnect(dpNames, answer, {success(result), error()})
-  //   dpNames: string[] — DP element names to subscribe to
-  //   answer:  boolean  — true = receive current value immediately
-  //   success: called on EVERY value change with result object:
-  //     result.data      — array of values (one per subscribed DP)
-  //     result.dataCount — number of subscribed DPs
-  //     result.dataDpa   — array of DP names
-  //     result.dataTime  — array of timestamps
+  // In live mode: sends toCtrl({cmd:"dpConnect", dp, answer}).
+  // The CTRL side registers a dpConnect and pushes updates via
+  // execJsFunction("_oaBridgeDpUpdate", dp, value).
   //
-  // Returns dpNames array as handle for dpDisconnect.
+  // Returns the DP name as a handle for dpDisconnect.
   // ══════════════════════════════════════════════════════════════
   function dpConnect(dp, callback) {
     if (_mode === 'live') {
-      const dpNames = Array.isArray(dp) ? dp : [dp];
-      oaJsApi.dpConnect(dpNames, false, {
-        success: function(result) {
-          // Unwrap the structured response for the callback.
-          // result = {data: [...], dataCount: N, dataDpa: [...], dataTime: [...]}
-          callback(result);
+      const dpName = Array.isArray(dp) ? dp[0] : dp;
+      _dpSubscriptions[dpName] = callback;
+
+      oaJsApi.toCtrl({
+        cmd: 'dpConnect',
+        dp: dpName,
+        answer: false
+      }, {
+        success: function() {
+          console.log('[OABridge] dpConnect registered:', dpName);
         },
         error: function() {
-          console.error('[OABridge] dpConnect error for:', dp);
+          console.error('[OABridge] dpConnect failed:', dpName);
+          delete _dpSubscriptions[dpName];
         }
       });
-      return dpNames; // handle for dpDisconnect
+      return dpName; // handle for dpDisconnect
     }
     console.log('[OABridge][Mock] dpConnect on:', dp);
     return { dp: dp, callback: callback, _mockId: Date.now() };
   }
 
   // ── dpDisconnect ────────────────────────────────────────────
-  // oaJsApi.dpDisconnect(dpNames, {success(), error()})
-  // dpNames must be in the same order as in dpConnect.
   function dpDisconnect(handle) {
     if (_mode === 'live' && handle) {
-      const dpNames = Array.isArray(handle) ? handle : [handle];
-      oaJsApi.dpDisconnect(dpNames, {
+      const dpName = typeof handle === 'string' ? handle : (Array.isArray(handle) ? handle[0] : null);
+      if (!dpName) return;
+
+      delete _dpSubscriptions[dpName];
+
+      oaJsApi.toCtrl({
+        cmd: 'dpDisconnect',
+        dp: dpName
+      }, {
         success: function() {},
         error: function() {}
       });
@@ -280,41 +287,29 @@ const OABridge = (() => {
 
   // ══════════════════════════════════════════════════════════════
   // dpExists — Check if a DP exists
-  //
-  // Not directly in oaJsApi; uses dpNames pattern match.
-  // oaJsApi.dpNames(pattern, dpType, {success(data), error()})
+  // Uses dpNames pattern match in CTRL.
   // ══════════════════════════════════════════════════════════════
   function dpExists(dp) {
     if (_mode === 'live') {
-      return new Promise((resolve, reject) => {
-        oaJsApi.dpNames(dp, '', {
-          success: function(data) {
-            resolve(Array.isArray(data) && data.length > 0);
-          },
-          error: function() { reject(new Error('dpExists check failed: ' + dp)); }
-        });
-      });
+      return _sendToCtrl({
+        cmd: 'dpNames',
+        pattern: dp,
+        dpType: ''
+      }).then(data => Array.isArray(data) && data.length > 0);
     }
     return Promise.resolve(
       dp in _mockStore || _mockDpTree.some(d => d.startsWith(dp))
     );
   }
 
-  // ── dpCreate — Create a new DP (via toCtrl to panel CTRL) ──
-  // Not in oaJsApi; delegates to panel CTRL via toCtrl.
+  // ── dpCreate — Create a new DP ────────────────────────────
+  // CTRL handler: dpCreate(dpName, dpTypeId) → msgToJs(params, rc)
   function dpCreate(dpName, dpType) {
     if (_mode === 'live') {
-      return new Promise((resolve, reject) => {
-        oaJsApi.toCtrl({
-          cmd: 'dpCreate',
-          dpName: dpName,
-          dpType: dpType
-        }, {
-          success: function() { resolve(); },
-          error: function() {
-            reject(new Error('dpCreate failed (toCtrl): ' + dpName));
-          }
-        });
+      return _sendToCtrl({
+        cmd: 'dpCreate',
+        dpName: dpName,
+        dpType: dpType
       });
     }
     _mockDpTree.push(dpName);
@@ -323,20 +318,16 @@ const OABridge = (() => {
 
   // ══════════════════════════════════════════════════════════════
   // browseDatapoints — List DPs matching a filter
-  //
-  // oaJsApi.dpNames(pattern, dpType, {success(data), error()})
+  // CTRL handler: dpNames(pattern, dpType) → msgToJs(params, names)
   // ══════════════════════════════════════════════════════════════
   function browseDatapoints(filter) {
     if (_mode === 'live') {
       const pattern = filter ? '*' + filter + '*' : '*';
-      return new Promise((resolve, reject) => {
-        oaJsApi.dpNames(pattern, '', {
-          success: function(data) {
-            resolve(Array.isArray(data) ? data : []);
-          },
-          error: function() { reject(new Error('dpNames browse failed')); }
-        });
-      });
+      return _sendToCtrl({
+        cmd: 'dpNames',
+        pattern: pattern,
+        dpType: ''
+      }).then(data => Array.isArray(data) ? data : []);
     }
     const items = _mockDpTree.filter(dp =>
       !filter || dp.toLowerCase().includes(filter.toLowerCase())

@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  kpiWebView.xml
+  WinCC OA Panel — KPI Dashboard WebView
+  Contains a single WebView EWO that hosts the HTML application.
+  All data access is handled by the CTRL library kpiDataAccess.ctl.
+-->
+<panel version="14">
+  <properties>
+    <prop name="size">1920 1080</prop>
+    <prop name="backColor">_3DFace</prop>
+  </properties>
+
+  <!-- Panel-level Initialize (empty — all logic is in the WebView shape) -->
+  <script>
+    <![CDATA[
+main()
+{
+}
+    ]]>
+  </script>
+
+  <layer name="0">
+    <shape type="WEBVIEW_EWO" name="webView_kpiConfig">
+      <properties>
+        <prop name="geometry">10 10 1900 1060</prop>
+        <prop name="visible">true</prop>
+      </properties>
+
+      <!-- Initialize: load the CTRL data access library and the HTML snippet -->
+      <script event="Initialize">
+        <![CDATA[
+#uses "libs/kpiDataAccess"
+
+main()
+{
+  // Register this shape for dpConnect push callbacks
+  kpiDataAccessInit(this);
+
+  // Load the KPI Configuration HTML via loadSnippet.
+  // This injects the oaJsApi library into the page.
+  // Path is relative to the WinCC OA web server root (data/ directory).
+  this.loadSnippet("/webview/index.html");
+}
+        ]]>
+      </script>
+
+      <!-- messageReceived: dispatch ALL commands to the CTRL data access layer -->
+      <script event="messageReceived">
+        <![CDATA[
+messageReceived(mapping params)
+{
+  kpiHandleMessage(this, params);
+}
+        ]]>
+      </script>
+
+    </shape>
+  </layer>
+</panel>
