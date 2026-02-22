@@ -1,63 +1,63 @@
 # WinCC OA KPI Configuration & Performance Manager
 
-Configuration web-based pour le calcul de KPIs, l'analyse OEE et le suivi des temps d'arret dans WinCC OA.
-Inspiré de Siemens Industrial Edge (IIH + Performance Insight).
+Web-based configuration for KPI calculation, OEE analysis, and downtime tracking in WinCC OA.
+Inspired by Siemens Industrial Edge (IIH + Performance Insight).
 
 ---
 
 ## Quick Start
 
-### 1. Mode Simulation (sans WinCC OA)
+### 1. Simulation Mode (without WinCC OA)
 
-Ouvrir directement dans un navigateur pour tester l'interface :
+Open directly in a browser to test the interface:
 
 ```bash
-# Depuis la racine du projet
+# From the project root
 open webview/index.html
-# ou
+# or
 python3 -m http.server 8080 --directory webview
-# puis ouvrir http://localhost:8080
+# then open http://localhost:8080
 ```
 
-Le mode simulation est automatiquement activé quand `oaJS` n'est pas détecté. Les données sont persistées dans `localStorage`.
+Simulation mode is automatically enabled when `oaJS` is not detected. Data is persisted in `localStorage`.
 
-### 2. Intégration WinCC OA
+### 2. WinCC OA Integration
 
-#### a) Importer les Datapoint Types
+#### a) Import Datapoint Types
 
-1. Ouvrir le **Para** dans WinCC OA
-2. **Import** > sélectionner `dplist/kpi_dptypes.dpl`
-3. Vérifier que les types `KPI_Config`, `KPI_Result` et `KPI_OEE_Result` sont créés
+1. Open **Para** in WinCC OA
+2. **Import** > select `dplist/kpi_dptypes.dpl`
+3. Verify that the types `KPI_Config`, `KPI_Result`, and `KPI_OEE_Result` are created
 
-#### b) Copier les fichiers dans le projet WinCC OA
+#### b) Copy files into the WinCC OA project
 
 ```
-<Projet_WinCC_OA>/
+<WinCC_OA_Project>/
 ├── panels/
-│   └── kpiWebView.pnl        ← copier depuis panels/
+│   └── kpiWebView.pnl        ← copy from panels/
 ├── scripts/
 │   └── libs/
-│       ├── kpiAggregationEngine.ctl  ← copier depuis scripts/libs/
-│       └── kpiOeeEngine.ctl          ← copier depuis scripts/libs/
-└── webview/                   ← copier le dossier entier
+│       ├── kpiAggregationEngine.ctl  ← copy from scripts/libs/
+│       └── kpiOeeEngine.ctl          ← copy from scripts/libs/
+└── webview/                   ← copy the entire folder
     ├── index.html
     ├── css/style.css
     └── js/*.js
 ```
 
-#### c) Configurer les managers CTRL
+#### c) Configure CTRL managers
 
-Dans la **Console** WinCC OA, ajouter deux managers CTRL :
+In the WinCC OA **Console**, add two CTRL managers:
 
 | Manager | Script |
 |---------|--------|
 | CTRL Manager 1 | `scripts/libs/kpiAggregationEngine.ctl` |
 | CTRL Manager 2 | `scripts/libs/kpiOeeEngine.ctl` |
 
-#### d) Ouvrir le panel
+#### d) Open the panel
 
-- Ouvrir `panels/kpiWebView.pnl` dans GEDI ou le module Vision
-- La page HTML se charge dans le widget WebView et communique via `oaJS`
+- Open `panels/kpiWebView.pnl` in GEDI or the Vision module
+- The HTML page loads in the WebView widget and communicates via `oaJS`
 
 ---
 
@@ -65,112 +65,112 @@ Dans la **Console** WinCC OA, ajouter deux managers CTRL :
 
 ```
 webview/
-├── index.html            # Page principale (Single Page App)
-├── css/style.css         # Theme industriel
+├── index.html            # Main page (Single Page App)
+├── css/style.css         # Industrial theme
 └── js/
-    ├── oabridge.js       # Couche d'abstraction oaJS + mode mock
-    ├── utils.js          # Helpers, constantes, formatage
-    ├── sourceConfig.js   # Config des sources de données
-    ├── aggregationConfig.js  # Config des agrégations KPI
-    ├── machineStateConfig.js # Config des états machines
-    ├── oeeConfig.js      # Config OEE
-    ├── oeeAnalysis.js    # Analyse OEE temps réel (agrégation à l'affichage)
-    ├── correctionManager.js  # Correction de données archivées
-    └── app.js            # Point d'entrée, tabs, DP browser
+    ├── oabridge.js       # oaJS abstraction layer + mock mode
+    ├── utils.js          # Helpers, constants, formatting
+    ├── sourceConfig.js   # Data source configuration
+    ├── aggregationConfig.js  # KPI aggregation configuration
+    ├── machineStateConfig.js # Machine state configuration
+    ├── oeeConfig.js      # OEE configuration
+    ├── oeeAnalysis.js    # Real-time OEE analysis (display-time aggregation)
+    ├── correctionManager.js  # Archive data correction
+    └── app.js            # Entry point, tabs, DP browser
 
 scripts/libs/
-├── kpiAggregationEngine.ctl  # Moteur de calcul des agrégations
-└── kpiOeeEngine.ctl          # Moteur de calcul OEE + analyse arrêts
+├── kpiAggregationEngine.ctl  # Aggregation calculation engine
+└── kpiOeeEngine.ctl          # OEE calculation engine + downtime analysis
 
 panels/
-└── kpiWebView.pnl       # Panel WinCC OA avec WebView
+└── kpiWebView.pnl       # WinCC OA panel with WebView
 
 dplist/
-└── kpi_dptypes.dpl       # Export des types de DP
+└── kpi_dptypes.dpl       # DP type export
 ```
 
 ---
 
-## Fonctionnalités
+## Features
 
-### Onglet Sources
+### Sources Tab
 
-Configuration des datapoints sources :
+Source datapoint configuration:
 
-| Paramètre | Description |
+| Parameter | Description |
 |-----------|-------------|
-| **Name** | Nom lisible de la source |
-| **Datapoint** | Chemin DP WinCC OA (ex: `System1:Plant.Water.Counter`) |
+| **Name** | Human-readable source name |
+| **Datapoint** | WinCC OA DP path (e.g. `System1:Plant.Water.Counter`) |
 | **Data Type** | FLOAT, INT, BOOL, UINT, STRING |
-| **Characterization** | Type de signal — voir tableau ci-dessous |
-| **Archiving** | Activation, classe d'archivage, lissage (deadband) |
-| **Limits** | Valeurs min/max de validité |
+| **Characterization** | Signal type — see table below |
+| **Archiving** | Activation, archive class, smoothing (deadband) |
+| **Limits** | Min/max validity values |
 
-**Caractérisations disponibles :**
+**Available characterizations:**
 
 | Type | Usage |
 |------|-------|
-| Process Value | Température, pression, niveau... |
-| Counter | Compteur incrémental (eau, énergie, pièces) |
-| Flow Rate | Débit instantané |
-| Status | État binaire ON/OFF |
-| Setpoint | Consigne |
-| Energy Meter | Compteur d'énergie |
-| Machine State | Signal d'état machine (pour OEE) |
+| Process Value | Temperature, pressure, level... |
+| Counter | Incremental counter (water, energy, pieces) |
+| Flow Rate | Instantaneous flow rate |
+| Status | Binary state ON/OFF |
+| Setpoint | Setpoint value |
+| Energy Meter | Energy counter |
+| Machine State | Machine state signal (for OEE) |
 
-### Onglet Aggregations
+### Aggregations Tab
 
-Configuration des KPIs calculés :
+Computed KPI configuration:
 
-| Méthode | Description | Usage typique |
-|---------|-------------|---------------|
-| Sum | Somme des valeurs | Consommation totale |
-| Average | Moyenne arithmétique | Température moyenne |
-| Min / Max | Extrema | Valeurs crête |
-| Count | Nombre d'échantillons | Fréquence d'événements |
-| Delta | Différence premier-dernier | Consommation compteur |
-| Time-Weighted Avg | Moyenne pondérée par le temps | Process values |
-| Flow from Counter | Delta / période (en unités/h) | Débit depuis compteur |
-| Uptime Ratio | % de temps à l'état ON | Disponibilité |
-| Std Deviation | Écart-type | Variabilité process |
+| Method | Description | Typical Usage |
+|--------|-------------|---------------|
+| Sum | Sum of values | Total consumption |
+| Average | Arithmetic mean | Average temperature |
+| Min / Max | Extremes | Peak values |
+| Count | Number of samples | Event frequency |
+| Delta | First-to-last difference | Counter consumption |
+| Time-Weighted Avg | Time-weighted average | Process values |
+| Flow from Counter | Delta / period (in units/h) | Flow rate from counter |
+| Uptime Ratio | % of time in ON state | Availability |
+| Std Deviation | Standard deviation | Process variability |
 
-**Périodes** : 15min, Horaire, Poste, Jour, Semaine, Mois (calendaire ou glissant).
+**Periods**: 15min, Hourly, Shift, Day, Week, Month (calendar-aligned or sliding).
 
-**Expression personnalisée** : formule libre utilisant `delta`, `sum`, `avg`, `min`, `max`, `count`, `periodSeconds`.
+**Custom expression**: free-form formula using `delta`, `sum`, `avg`, `min`, `max`, `count`, `periodSeconds`.
 
-### Onglet Machine States
+### Machine States Tab
 
-Configuration des états machines pour l'analyse OEE et le suivi d'arrêts :
+Machine state configuration for OEE analysis and downtime tracking:
 
-- Définir chaque état possible (code + label + catégorie)
-- Catégories : Producing, Idle, Planned Stop, Unplanned Stop, Setup, Maintenance
-- Marquer les arrêts planifiés vs non-planifiés
-- Configurer le suivi des causes d'arrêt avec catégorisation (Mécanique, Électrique, Process, Opérateur, Qualité, Approvisionnement)
+- Define each possible state (code + label + category)
+- Categories: Producing, Idle, Planned Stop, Unplanned Stop, Setup, Maintenance
+- Mark planned vs unplanned stops
+- Configure downtime cause tracking with categorization (Mechanical, Electrical, Process, Operator, Quality, Supply)
 
-**Preset par défaut :** 6 états + 9 causes pré-configurés, modifiables.
+**Default preset:** 6 states + 9 causes pre-configured, fully customizable.
 
-### Onglet OEE
+### OEE Tab
 
-Configuration du calcul OEE (Overall Equipment Effectiveness) :
+OEE (Overall Equipment Effectiveness) calculation configuration:
 
 ```
 OEE = Availability x Performance x Quality
 ```
 
-| Facteur | Formule | Sources |
-|---------|---------|---------|
-| **Availability** | (Temps planifié - Arrêts non planifiés) / Temps planifié | Depuis les états machine |
-| **Performance** | (Temps cycle idéal x Pièces totales) / Temps de marche | Compteur pièces + cycle idéal ou vitesse nominale |
-| **Quality** | Pièces bonnes / Pièces totales | Compteur bonnes pièces, ou rejects, ou ratio fixe |
+| Factor | Formula | Sources |
+|--------|---------|---------|
+| **Availability** | (Planned Time - Unplanned Stops) / Planned Time | From machine states |
+| **Performance** | (Ideal Cycle Time x Total Pieces) / Run Time | Piece counter + ideal cycle time or design speed |
+| **Quality** | Good Pieces / Total Pieces | Good piece counter, reject counter, or fixed ratio |
 
-**Résultats écrits dans les DPs :**
+**Results written to DPs:**
 - `<prefix>.Availability` (%)
 - `<prefix>.Performance` (%)
 - `<prefix>.Quality` (%)
 - `<prefix>.OEE` (%)
-- `<prefix>.StateTime.<state>` (secondes par état)
-- `<prefix>.Causes.<cause>.Count` (nombre d'arrêts)
-- `<prefix>.Causes.<cause>.Duration` (durée en secondes)
+- `<prefix>.StateTime.<state>` (seconds per state)
+- `<prefix>.Causes.<cause>.Count` (stop count)
+- `<prefix>.Causes.<cause>.Duration` (duration in seconds)
 
 ---
 
@@ -178,21 +178,21 @@ OEE = Availability x Performance x Quality
 
 ### KPI_Config
 
-Stocke toute la configuration en JSON :
+Stores all configuration as JSON:
 
-| Élément | Type | Contenu |
+| Element | Type | Content |
 |---------|------|---------|
-| sources | string | JSON array des configs sources |
-| aggregations | string | JSON array des configs agrégation |
-| machines | string | JSON array des configs machine |
-| oee | string | JSON array des configs OEE |
-| recalcRequest | string | JSON requête de recalcul (déclenche recalcul KPI/OEE) |
+| sources | string | JSON array of source configs |
+| aggregations | string | JSON array of aggregation configs |
+| machines | string | JSON array of machine configs |
+| oee | string | JSON array of OEE configs |
+| recalcRequest | string | JSON recalculation request (triggers KPI/OEE recalculation) |
 
 ### KPI_Result
 
-Résultat d'une agrégation :
+Aggregation result:
 
-| Élément | Type |
+| Element | Type |
 |---------|------|
 | value | float |
 | lastCalc | time |
@@ -201,9 +201,9 @@ Résultat d'une agrégation :
 
 ### KPI_OEE_Result
 
-Résultat OEE :
+OEE result:
 
-| Élément | Type |
+| Element | Type |
 |---------|------|
 | Availability | float (%) |
 | Performance | float (%) |
@@ -212,58 +212,58 @@ Résultat OEE :
 | StateTime | dyn_float |
 | lastCalc | time |
 
-### Correction de données archivées
+### Archive Data Correction
 
-Le système intègre le mécanisme de correction d'archive WinCC OA :
+The system integrates the WinCC OA archive correction mechanism:
 
 | Concept | Description |
 |---------|-------------|
-| `_original.._value` | Valeur brute archivée (écrite par le moteur d'archivage) |
-| `_corr.._value` | Valeur corrigée (écrite via `dpSetTimed`) |
-| `_offline.._value` | Abstraction : retourne `_corr` si présente, sinon `_original` |
+| `_original.._value` | Raw archived value (written by the archiving engine) |
+| `_corr.._value` | Corrected value (written via `dpSetTimed`) |
+| `_offline.._value` | Abstraction: returns `_corr` if present, otherwise `_original` |
 
-**Workflow de correction :**
+**Correction workflow:**
 
-1. Ouvrir la modale de correction depuis le bouton loupe sur une source
-2. Charger l'historique pour visualiser les valeurs originales et corrigées
-3. Appliquer une correction : écrit via `dpSetTimed(timestamp, dp:_corr.._value, value)`
-4. Déclencher le recalcul KPI : les moteurs CTRL relisent via `_offline` (obtiennent les corrections) et écrivent les KPI recalculés dans `_corr.._value` des DPs cibles
+1. Open the correction modal from the magnifying glass button on a source
+2. Load history to view original and corrected values
+3. Apply a correction: writes via `dpSetTimed(timestamp, dp:_corr.._value, value)`
+4. Trigger KPI recalculation: the CTRL engines re-read via `_offline` (which returns corrections) and write recalculated KPI results into `_corr.._value` of the target DPs
 
-**Recalcul automatique :**
+**Automatic recalculation:**
 
-- Le webview écrit une requête JSON dans `KPI_Config.recalcRequest`
-- Les deux moteurs CTRL (`kpiAggregationEngine` et `kpiOeeEngine`) surveillent ce DP via `dpConnect`
-- À réception, ils recalculent les KPIs/OEE affectés en relisant via `_offline`
-- Les résultats corrigés sont écrits via `dpSetTimed` dans `_corr.._value` des DPs résultats
-- Les requêtes `_offline` sur les KPIs retournent alors les valeurs corrigées
+- The webview writes a JSON request to `KPI_Config.recalcRequest`
+- Both CTRL engines (`kpiAggregationEngine` and `kpiOeeEngine`) monitor this DP via `dpConnect`
+- Upon receipt, they recalculate affected KPIs/OEE by re-reading via `_offline`
+- Corrected results are written via `dpSetTimed` into `_corr.._value` of the result DPs
+- Subsequent `_offline` queries on KPI DPs then return the corrected values
 
 ---
 
-## Communication oaJS
+## oaJS Communication
 
-La page HTML communique avec WinCC OA via l'API JavaScript `oaJS` fournie par le widget WebView :
+The HTML page communicates with WinCC OA via the `oaJS` JavaScript API provided by the WebView widget:
 
 ```javascript
-// Lecture d'un DP
+// Read a DP
 OABridge.dpGet("KPI_Config.sources").then(value => { ... });
 
-// Écriture d'un DP
+// Write a DP
 OABridge.dpSet("KPI_Config.sources", jsonString);
 
-// Requête DP (browse)
+// DP query (browse)
 OABridge.dpQuery("SELECT '_online.._value' FROM '*'");
 
-// Subscription temps réel
+// Real-time subscription
 OABridge.dpConnect("System1:Plant.Water.Counter", (value) => { ... });
 
-// Correction de valeur archivée (dpSetTimed)
+// Archive value correction (dpSetTimed)
 OABridge.writeCorrection("System1:Plant.Water.Counter", timestamp, 123.45);
-// Équivalent à: dpSetTimed(timestamp, "System1:Plant.Water.Counter:_corr.._value", 123.45)
+// Equivalent to: dpSetTimed(timestamp, "System1:Plant.Water.Counter:_corr.._value", 123.45)
 
-// Lecture archive originale vs corrigée
+// Read original vs corrected archive
 OABridge.queryOriginalValues(dp, tStart, tEnd);     // SELECT '_original.._value' ...
 OABridge.queryCorrectionValues(dp, tStart, tEnd);    // SELECT '_corr.._value' ...
-// Toutes les lectures standard utilisent _offline (retourne correction si présente)
+// All standard reads use _offline (returns correction if present)
 ```
 
-En mode simulation (hors WinCC OA), les appels sont interceptés et remplacés par un mock avec `localStorage`.
+In simulation mode (outside WinCC OA), calls are intercepted and replaced by a mock using `localStorage`.
