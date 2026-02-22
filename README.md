@@ -65,7 +65,7 @@ In the WinCC OA **Console**, add two CTRL managers:
 
 - Open `panels/kpiWebView.pnl` in GEDI or the Vision module
 - The panel calls `loadSnippet("/webview/index.html")` which loads the HTML into the WebView EWO and injects the `oaJsApi` library
-- The `messageReceived` handler in the panel processes `dpSetTimed` and `dpCreate` commands from JavaScript (these are not available in `oaJsApi` directly)
+- The `messageReceived` handler in the panel processes `dpCreate` commands from JavaScript (not available in `oaJsApi` directly). `dpSetTimed` is called natively via `oaJsApi.dpSetTimed()`.
 
 ---
 
@@ -267,9 +267,9 @@ OABridge.browseDatapoints("Plant.*");
 // Real-time subscription — oaJsApi.dpConnect(dpNames, answer, {success, error})
 OABridge.dpConnect("System1:Plant.Water.Counter:_online.._value", (data) => { ... });
 
-// Archive value correction — oaJsApi.toCtrl → panel CTRL dpSetTimed
+// Archive value correction — oaJsApi.dpSetTimed (native)
 OABridge.writeCorrection("System1:Plant.Water.Counter", timestamp, 123.45);
-// Panel CTRL executes: dpSetTimed(ts, "System1:Plant.Water.Counter:_corr.._value", 123.45)
+// Calls oaJsApi.dpSetTimed(ts, "System1:Plant.Water.Counter:_corr.._value", 123.45)
 
 // Read original vs corrected archive — oaJsApi.dpQuery with TIMERANGE
 OABridge.queryOriginalValues(dp, tStart, tEnd);     // SELECT '_original.._value' ...
@@ -278,7 +278,13 @@ OABridge.queryCorrectionValues(dp, tStart, tEnd);    // SELECT '_corr.._value' .
 ```
 
 **Functions not in oaJsApi** (delegated to panel CTRL via `oaJsApi.toCtrl` + `messageReceived`):
-- `dpSetTimed` — archive correction writes
 - `dpCreate` — datapoint creation
+
+**Native oaJsApi functions used:**
+- `dpGet` / `dpSet` — single or array of DPs
+- `dpSetTimed` — archive correction writes (with timestamp)
+- `dpQuery` — SQL-like archive queries
+- `dpConnect` / `dpDisconnect` — real-time subscriptions
+- `dpNames` — DP browsing and existence check
 
 In simulation mode (outside WinCC OA), all calls are intercepted and replaced by a mock using `localStorage`.

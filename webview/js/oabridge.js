@@ -67,9 +67,16 @@ const OABridge = (() => {
   }
 
   // ── dpGetMultiple — Read multiple DPs ───────────────────────
+  // oaJsApi.dpGet supports arrays natively:
+  // oaJsApi.dpGet([dp1, dp2], {success(data)}) — data is array
   function dpGetMultiple(dps) {
     if (_mode === 'live') {
-      return Promise.all(dps.map(dp => dpGet(dp)));
+      return new Promise((resolve, reject) => {
+        oaJsApi.dpGet(dps, {
+          success: function(data) { resolve(data); },
+          error: function() { reject(new Error('dpGetMultiple failed')); }
+        });
+      });
     }
     const result = dps.map(dp => _mockStore[dp] !== undefined ? _mockStore[dp] : null);
     return Promise.resolve(result);
@@ -95,9 +102,18 @@ const OABridge = (() => {
   }
 
   // ── dpSetMultiple — Write multiple DPs ──────────────────────
+  // oaJsApi.dpSet supports arrays natively:
+  // oaJsApi.dpSet([dp1, dp2], [val1, val2], {success, error})
   function dpSetMultiple(dpValuePairs) {
     if (_mode === 'live') {
-      return Promise.all(dpValuePairs.map(p => dpSet(p[0], p[1])));
+      const dps = dpValuePairs.map(p => p[0]);
+      const vals = dpValuePairs.map(p => p[1]);
+      return new Promise((resolve, reject) => {
+        oaJsApi.dpSet(dps, vals, {
+          success: function() { resolve(); },
+          error: function() { reject(new Error('dpSetMultiple failed')); }
+        });
+      });
     }
     dpValuePairs.forEach(p => { _mockStore[p[0]] = p[1]; });
     return Promise.resolve();
@@ -107,26 +123,17 @@ const OABridge = (() => {
   // dpSetTimed — Write a value at a specific timestamp
   // Used for archive corrections: writes to _corr.._value
   //
-  // dpSetTimed is NOT available in oaJsApi. In live mode we
-  // delegate to the panel CTRL script via oaJsApi.toCtrl().
-  // The panel's messageReceived handler calls the real
-  // CTRL dpSetTimed(time, dp, value).
+  // oaJsApi.dpSetTimed(sourceTime, dpeName, value, {success, error})
+  // sourceTime: Date object — the archive timestamp
   // ══════════════════════════════════════════════════════════════
   function dpSetTimed(timestamp, dp, value) {
     if (_mode === 'live') {
       return new Promise((resolve, reject) => {
-        const ts = timestamp instanceof Date
-          ? timestamp.toISOString()
-          : String(timestamp);
-        oaJsApi.toCtrl({
-          cmd: 'dpSetTimed',
-          timestamp: ts,
-          dp: dp,
-          value: value
-        }, {
+        const ts = timestamp instanceof Date ? timestamp : new Date(timestamp);
+        oaJsApi.dpSetTimed(ts, dp, value, {
           success: function() { resolve(); },
           error: function() {
-            reject(new Error('dpSetTimed failed (toCtrl): ' + dp));
+            reject(new Error('dpSetTimed failed: ' + dp));
           }
         });
       });
@@ -146,9 +153,21 @@ const OABridge = (() => {
   }
 
   // ── dpSetTimedMultiple — Multiple timed writes ──────────────
+  // oaJsApi.dpSetTimed supports arrays natively:
+  // oaJsApi.dpSetTimed(sourceTime, [dp1, dp2], [val1, val2], opts)
   function dpSetTimedMultiple(timestamp, dpValuePairs) {
     if (_mode === 'live') {
-      return Promise.all(dpValuePairs.map(p => dpSetTimed(timestamp, p[0], p[1])));
+      const ts = timestamp instanceof Date ? timestamp : new Date(timestamp);
+      const dps = dpValuePairs.map(p => p[0]);
+      const vals = dpValuePairs.map(p => p[1]);
+      return new Promise((resolve, reject) => {
+        oaJsApi.dpSetTimed(ts, dps, vals, {
+          success: function() { resolve(); },
+          error: function() {
+            reject(new Error('dpSetTimedMultiple failed'));
+          }
+        });
+      });
     }
     dpValuePairs.forEach(p => {
       const key = p[0].replace(':_corr.._value', '').replace(':_offline.._value', '');
@@ -218,10 +237,14 @@ const OABridge = (() => {
   // ══════════════════════════════════════════════════════════════
   // dpConnect — Subscribe to value changes (hotlink)
   //
-  // oaJsApi.dpConnect(dpNames, answer, {success(data), error()})
+  // oaJsApi.dpConnect(dpNames, answer, {success(result), error()})
   //   dpNames: string[] — DP element names to subscribe to
   //   answer:  boolean  — true = receive current value immediately
-  //   success: called on EVERY value change (not just once)
+  //   success: called on EVERY value change with result object:
+  //     result.data      — array of values (one per subscribed DP)
+  //     result.dataCount — number of subscribed DPs
+  //     result.dataDpa   — array of DP names
+  //     result.dataTime  — array of timestamps
   //
   // Returns dpNames array as handle for dpDisconnect.
   // ══════════════════════════════════════════════════════════════
@@ -229,7 +252,11 @@ const OABridge = (() => {
     if (_mode === 'live') {
       const dpNames = Array.isArray(dp) ? dp : [dp];
       oaJsApi.dpConnect(dpNames, false, {
-        success: function(data) { callback(data); },
+        success: function(result) {
+          // Unwrap the structured response for the callback.
+          // result = {data: [...], dataCount: N, dataDpa: [...], dataTime: [...]}
+          callback(result);
+        },
         error: function() {
           console.error('[OABridge] dpConnect error for:', dp);
         }
