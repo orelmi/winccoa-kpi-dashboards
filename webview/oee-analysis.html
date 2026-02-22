@@ -77,6 +77,48 @@
     </div>
   </main>
 
+  <!-- MODAL: Stop Cause Editor -->
+  <div class="modal-overlay" id="modalStopEditor">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Edit Stop Cause</h3>
+        <button class="modal-close" data-close="modalStopEditor">&times;</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="stopEditorIndex">
+        <div id="stopEditorInfo" class="stop-editor-info"></div>
+        <div id="stopEditorSegments" class="stop-editor-segments"></div>
+        <hr style="margin:12px 0;border-color:#edf0f3;">
+        <div class="form-group">
+          <label for="stopEditorCause">Assign / Change Cause</label>
+          <select id="stopEditorCause"></select>
+        </div>
+        <div class="modal-footer" style="margin-top:12px;">
+          <button type="button" class="btn btn-secondary" data-close="modalStopEditor">Cancel</button>
+          <button type="button" class="btn btn-primary" onclick="OeeAnalysis.saveStopCause()">Save Cause</button>
+        </div>
+        <div id="stopEditorSplitSection" style="display:none;">
+          <hr style="margin:12px 0;border-color:#edf0f3;">
+          <h4 style="margin-bottom:8px;">Split Stop</h4>
+          <p class="form-hint">Divide this stop into two segments with different causes.</p>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="stopEditorSplitTime">Split at</label>
+              <input type="datetime-local" id="stopEditorSplitTime">
+            </div>
+            <div class="form-group">
+              <label for="stopEditorCause2">Second cause</label>
+              <select id="stopEditorCause2"></select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-primary" onclick="OeeAnalysis.splitStopCause()">Split &amp; Save</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="toast-container" id="toastContainer"></div>
 
   <!-- Scripts -->
@@ -94,6 +136,7 @@
       const mode = KPI.init();
       Nav.render('oee-analysis');
       Nav.updateConnectionStatus(mode);
+      Utils.initModalCloseButtons();
       AssetConfig.init();         // Data-only (provides context filtering)
       Nav.renderContextFilter([function() { OeeAnalysis.refreshMachineSelect(); }]);
       CalendarConfig.init();      // Data-only (needed for calendar-based planned time)

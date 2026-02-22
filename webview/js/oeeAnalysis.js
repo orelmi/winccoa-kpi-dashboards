@@ -17,6 +17,9 @@ const OeeAnalysis = (() => {
 
   let _currentMachineId = null;
   let _currentOeeId = null;
+  let _currentMachine = null;
+  let _currentStopRecords = [];
+  let _currentCauseHistory = [];
 
   // ── Public: refresh the analysis view ───────────────────────
   async function refresh() {
@@ -39,6 +42,7 @@ const OeeAnalysis = (() => {
       _renderEmpty('Machine configuration not found.');
       return;
     }
+    _currentMachine = machine;
 
     // Find matching OEE config for this machine (if any)
     const oeeConfigs = OeeConfig.getAll();
@@ -59,12 +63,23 @@ const OeeAnalysis = (() => {
     // Compute time per state and frequency
     const stateStats = _computeStateStats(stateHistory, machine.states, tRange.start, tRange.end);
 
-    // Compute cause stats if tracking enabled
+    // Query cause history (correlated in mock mode)
+    let causeHistory = [];
     let causeStats = null;
     if (machine.trackCauses && machine.causeDp) {
-      const causeHistory = await _queryStateHistory(machine.causeDp, tRange.start, tRange.end);
+      if (KPI.getMode() === 'mock') {
+        causeHistory = await _generateCorrelatedCauseHistory(stateHistoryRaw, machine);
+      } else {
+        causeHistory = await _queryStateHistory(machine.causeDp, tRange.start, tRange.end);
+      }
+      _currentCauseHistory = causeHistory;
       causeStats = _computeCauseStats(causeHistory, machine.causes || [], tRange.start, tRange.end);
     }
+
+    // Build stop records (aligned state + cause)
+    _currentStopRecords = _buildStopRecords(
+      stateHistory, causeHistory, machine.states, machine.causes || [],
+      tRange.start, tRange.end);
 
     // Compute OEE factors if config available
     let oeeResult = null;
@@ -91,7 +106,8 @@ const OeeAnalysis = (() => {
 
     // Render everything
     _renderAnalysis(machine, stateStats, causeStats, oeeResult, tRange,
-      stateHistoryRaw, mtbfMttr, teep, prevOeeResult, prevMtbfMttr, microstopResult);
+      stateHistoryRaw, mtbfMttr, teep, prevOeeResult, prevMtbfMttr, microstopResult,
+      _currentStopRecords);
   }
 
   // ── Time range from UI ──────────────────────────────────────
@@ -304,8 +320,8 @@ const OeeAnalysis = (() => {
     const stats = {};
 
     (causeDefinitions || []).forEach(cd => {
-      stats[cd.code] = {
-        code: cd.code,
+      stats[cd.value] = {
+        value: cd.value,
         label: cd.label,
         category: cd.category,
         totalSeconds: 0,
@@ -320,7 +336,7 @@ const OeeAnalysis = (() => {
 
     for (let i = 0; i < causeHistory.length; i++) {
       const entry = causeHistory[i];
-      const code = String(entry.value);
+      const val = String(entry.value);
       const entryMs = entry.time.getTime();
 
       let segEnd = (i + 1 < causeHistory.length)
@@ -334,21 +350,143 @@ const OeeAnalysis = (() => {
 
       const durationSec = (segEnd - segStart) / 1000;
 
-      if (!stats[code]) {
-        stats[code] = {
-          code: code,
-          label: 'Cause ' + code,
+      if (!stats[val]) {
+        stats[val] = {
+          value: val,
+          label: 'Cause ' + val,
           category: 'OTHER',
           totalSeconds: 0,
           occurrences: 0,
         };
       }
 
-      stats[code].totalSeconds += durationSec;
-      stats[code].occurrences += 1;
+      stats[val].totalSeconds += durationSec;
+      stats[val].occurrences += 1;
     }
 
     return stats;
+  }
+
+  // ── Build stop records (align states with causes) ──────────
+  // Each non-PRODUCING state period is a "stop". For UNPLANNED_STOP
+  // states, we overlay the cause history to find which cause(s)
+  // were active. If a cause changes during a stop, segments are split.
+  function _buildStopRecords(stateHistory, causeHistory, stateDefinitions, causeDefinitions, tStart, tEnd) {
+    const stops = [];
+    const startMs = tStart.getTime();
+    const endMs = tEnd.getTime();
+
+    const causeLookup = {};
+    (causeDefinitions || []).forEach(cd => { causeLookup[String(cd.value)] = cd; });
+    const stateLookup = {};
+    (stateDefinitions || []).forEach(sd => { stateLookup[String(sd.value)] = sd; });
+
+    for (let i = 0; i < stateHistory.length; i++) {
+      const entry = stateHistory[i];
+      const val = String(entry.value);
+      if (val === '__MICROSTOP__') continue;
+
+      const sd = stateLookup[val];
+      if (!sd || sd.category === 'PRODUCING') continue;
+
+      const segStartMs = Math.max(entry.time.getTime(), startMs);
+      const segEndMs = i + 1 < stateHistory.length
+        ? Math.min(stateHistory[i + 1].time.getTime(), endMs)
+        : endMs;
+      if (segEndMs <= segStartMs) continue;
+
+      const stop = {
+        index: stops.length,
+        startMs: segStartMs,
+        endMs: segEndMs,
+        durationSec: (segEndMs - segStartMs) / 1000,
+        stateValue: val,
+        stateLabel: sd.label,
+        stateCategory: sd.category,
+        stateColor: sd.color,
+        isPlanned: sd.isPlanned,
+        segments: [],
+      };
+
+      // For unplanned stops, find cause segments overlapping this period
+      if (causeHistory && causeHistory.length > 0 &&
+          (sd.category === 'UNPLANNED_STOP' || (!sd.isPlanned && sd.category !== 'IDLE'))) {
+        for (let j = 0; j < causeHistory.length; j++) {
+          const ce = causeHistory[j];
+          const cStartMs = ce.time.getTime();
+          const cEndMs = j + 1 < causeHistory.length
+            ? causeHistory[j + 1].time.getTime() : endMs;
+
+          const overlapStart = Math.max(cStartMs, segStartMs);
+          const overlapEnd = Math.min(cEndMs, segEndMs);
+          if (overlapEnd <= overlapStart) continue;
+
+          const cv = String(ce.value);
+          const cd = causeLookup[cv];
+          stop.segments.push({
+            causeValue: cv,
+            causeLabel: cd ? cd.label : 'Cause ' + cv,
+            causeCategory: cd ? cd.category : 'OTHER',
+            startMs: overlapStart,
+            endMs: overlapEnd,
+            durationSec: (overlapEnd - overlapStart) / 1000,
+            source: 'auto',
+          });
+        }
+      }
+
+      stops.push(stop);
+    }
+
+    return stops;
+  }
+
+  // ── Generate correlated cause history for mock mode ────────
+  // Only produce cause codes during unplanned stop periods
+  function _generateCorrelatedCauseHistory(stateHistory, machine) {
+    const history = [];
+    const unplannedStates = new Set();
+    (machine.states || []).forEach(sd => {
+      if (sd.category === 'UNPLANNED_STOP' || (!sd.isPlanned && sd.category !== 'PRODUCING' && sd.category !== 'IDLE')) {
+        unplannedStates.add(String(sd.value));
+      }
+    });
+
+    const causeDefs = machine.causes || [];
+    if (causeDefs.length === 0) return Promise.resolve(history);
+
+    // Weighted random selection — mechanical/process more frequent
+    const catWeights = { MECHANICAL: 25, ELECTRICAL: 15, PROCESS: 20, OPERATOR: 10, QUALITY: 8, SUPPLY: 12, OTHER: 5, PLANNED: 5 };
+    const weighted = causeDefs.map(c => ({ value: c.value, weight: catWeights[c.category] || 5 }));
+    const totalW = weighted.reduce((s, w) => s + w.weight, 0);
+
+    function pickCause() {
+      const r = Math.random() * totalW;
+      let acc = 0;
+      for (let i = 0; i < weighted.length; i++) {
+        acc += weighted[i].weight;
+        if (r < acc) return weighted[i].value;
+      }
+      return weighted[0].value;
+    }
+
+    for (let i = 0; i < stateHistory.length; i++) {
+      const val = String(stateHistory[i].value);
+      if (unplannedStates.has(val)) {
+        // Assign a cause at the start of this stop
+        history.push({ value: pickCause(), time: new Date(stateHistory[i].time.getTime()) });
+        // Optionally split long stops (>30min) with a second cause
+        if (i + 1 < stateHistory.length) {
+          const dur = stateHistory[i + 1].time.getTime() - stateHistory[i].time.getTime();
+          if (dur > 1800000 && Math.random() < 0.3) {
+            const splitTime = stateHistory[i].time.getTime() + dur * (0.3 + Math.random() * 0.4);
+            history.push({ value: pickCause(), time: new Date(splitTime) });
+          }
+        }
+      }
+    }
+
+    return Promise.resolve(history);
   }
 
   // ── Microstop filtering ─────────────────────────────────────
@@ -648,7 +786,8 @@ const OeeAnalysis = (() => {
 
   // ── Render the full analysis view ───────────────────────────
   function _renderAnalysis(machine, stateStats, causeStats, oeeResult, tRange,
-    stateHistory, mtbfMttr, teep, prevOeeResult, prevMtbfMttr, microstopResult) {
+    stateHistory, mtbfMttr, teep, prevOeeResult, prevMtbfMttr, microstopResult,
+    stopRecords) {
     const container = document.getElementById('analysisResults');
     if (!container) return;
 
@@ -673,7 +812,7 @@ const OeeAnalysis = (() => {
 
     // ── Gantt Chart (state timeline) ──────────────────────────
     if (stateHistory && stateHistory.length > 0) {
-      html += _renderGanttChart(stateHistory, machine.states, tRange);
+      html += _renderGanttChart(stateHistory, machine.states, tRange, stopRecords);
     }
 
     // ── Time Model Breakdown ────────────────────────────────
@@ -682,13 +821,18 @@ const OeeAnalysis = (() => {
     // ── State Timeline Bar ────────────────────────────────────
     html += _renderTimelineBar(stateStats, totalSec);
 
+    // ── Production Losses Pareto (mixed states + causes) ─────
+    if (stopRecords && stopRecords.length > 0) {
+      html += _renderProductionLossesPareto(stateStats, stopRecords, machine.causes, totalSec);
+    }
+
+    // ── Stop List (clickable for cause editing) ──────────────
+    if (stopRecords && stopRecords.length > 0) {
+      html += _renderStopList(stopRecords, machine);
+    }
+
     // ── State Statistics Table ─────────────────────────────────
     html += _renderStateTable(stateStats, totalSec);
-
-    // ── Cause Pareto (if available) ───────────────────────────
-    if (causeStats) {
-      html += _renderCausePareto(causeStats, totalSec, machine.causes);
-    }
 
     container.innerHTML = html;
   }
@@ -924,21 +1068,91 @@ const OeeAnalysis = (() => {
     '</div>';
   }
 
-  // ── Cause Pareto chart (horizontal bars, hierarchical) ──────
-  function _renderCausePareto(causeStats, totalSec, causeDefinitions) {
-    const entries = Object.values(causeStats)
-      .filter(c => c.totalSeconds > 0 || c.occurrences > 0)
-      .sort((a, b) => b.totalSeconds - a.totalSeconds);
+  // ── Production Losses Pareto (mixed states + causes) ────────
+  // Combines non-producing state categories with cause breakdowns
+  // for unplanned stops into a single unified loss analysis.
+  function _renderProductionLossesPareto(stateStats, stopRecords, causeDefinitions, totalSec) {
+    const catColors = {
+      MECHANICAL: '#d9363e', ELECTRICAL: '#fd7e14', PROCESS: '#6f42c1',
+      OPERATOR: '#17a2b8', QUALITY: '#28a745', SUPPLY: '#e68a00',
+      PLANNED: '#6b7c8e', OTHER: '#adb5bd',
+    };
 
-    if (entries.length === 0) {
-      return '<div class="analysis-section">' +
-        '<h3 class="analysis-title">Downtime Causes</h3>' +
-        '<p class="analysis-hint">No downtime cause data for this period.</p>' +
-      '</div>';
+    // Build parentValue lookup
+    const parentMap = {};
+    (causeDefinitions || []).forEach(cd => {
+      if (cd.parentValue) parentMap[cd.value] = cd.parentValue;
+    });
+
+    const losses = [];
+
+    // Planned-category states (idle, setup, maintenance, planned stop)
+    Object.values(stateStats).forEach(s => {
+      if (s.category === 'PRODUCING' || s.totalSeconds <= 0) return;
+      if (s.category === 'UNPLANNED_STOP') return; // handled via cause breakdown
+      losses.push({
+        type: 'state', key: 'state_' + s.value,
+        label: s.label, category: s.category, color: s.color,
+        totalSeconds: s.totalSeconds, occurrences: s.transitionCount,
+        parentKey: null,
+      });
+    });
+
+    // Unplanned stops — break down by cause
+    const causeTotals = {};
+    let unplannedNoCause = 0;
+    let unplannedNoCauseCount = 0;
+    stopRecords.forEach(stop => {
+      if (stop.stateCategory !== 'UNPLANNED_STOP') return;
+      if (stop.segments.length === 0) {
+        unplannedNoCause += stop.durationSec;
+        unplannedNoCauseCount += 1;
+      } else {
+        stop.segments.forEach(seg => {
+          const key = seg.causeValue;
+          if (!causeTotals[key]) {
+            causeTotals[key] = {
+              label: seg.causeLabel, category: seg.causeCategory,
+              totalSeconds: 0, occurrences: 0,
+            };
+          }
+          causeTotals[key].totalSeconds += seg.durationSec;
+          causeTotals[key].occurrences += 1;
+        });
+      }
+    });
+
+    Object.entries(causeTotals).forEach(([key, ct]) => {
+      const parent = parentMap[key];
+      losses.push({
+        type: 'cause', key: 'cause_' + key,
+        label: ct.label,
+        category: ct.category,
+        color: catColors[ct.category] || '#d9363e',
+        totalSeconds: ct.totalSeconds, occurrences: ct.occurrences,
+        parentKey: parent ? 'cause_' + parent : null,
+      });
+    });
+
+    if (unplannedNoCause > 0) {
+      losses.push({
+        type: 'cause', key: 'cause___none__',
+        label: 'Unplanned (no cause assigned)', category: 'OTHER',
+        color: '#adb5bd',
+        totalSeconds: unplannedNoCause, occurrences: unplannedNoCauseCount,
+        parentKey: null,
+      });
     }
 
-    const maxDuration = entries.reduce((max, c) => Math.max(max, c.totalSeconds), 1);
+    losses.sort((a, b) => b.totalSeconds - a.totalSeconds);
 
+    if (losses.length === 0) {
+      return '<div class="analysis-section">' +
+        '<h3 class="analysis-title">Production Losses</h3>' +
+        '<p class="analysis-hint">No production losses for this period.</p></div>';
+    }
+
+    const maxDuration = losses.reduce((max, l) => Math.max(max, l.totalSeconds), 1);
     const fmtDuration = (sec) => {
       const h = Math.floor(sec / 3600);
       const m = Math.floor((sec % 3600) / 60);
@@ -946,77 +1160,246 @@ const OeeAnalysis = (() => {
       return m + 'min';
     };
 
-    const catColors = {
-      MECHANICAL: '#d9363e',
-      ELECTRICAL: '#fd7e14',
-      PROCESS: '#6f42c1',
-      OPERATOR: '#17a2b8',
-      QUALITY: '#28a745',
-      SUPPLY: '#e68a00',
-      PLANNED: '#6b7c8e',
-      OTHER: '#adb5bd',
-    };
-
-    // Build parentCode lookup from cause definitions
-    const parentMap = {};
-    (causeDefinitions || []).forEach(cd => {
-      if (cd.parentCode) parentMap[cd.code] = cd.parentCode;
-    });
-
-    // Build tree structure: group children under parents
-    const rootEntries = [];
+    // Tree structure: children under parents
+    const rootLosses = [];
     const childrenOf = {};
-    entries.forEach(c => {
-      const parent = parentMap[c.code];
-      if (parent && entries.some(e => e.code === parent)) {
-        if (!childrenOf[parent]) childrenOf[parent] = [];
-        childrenOf[parent].push(c);
+    losses.forEach(l => {
+      if (l.parentKey && losses.some(p => p.key === l.parentKey)) {
+        if (!childrenOf[l.parentKey]) childrenOf[l.parentKey] = [];
+        childrenOf[l.parentKey].push(l);
       } else {
-        rootEntries.push(c);
+        rootLosses.push(l);
       }
     });
 
-    // Render a Pareto row
-    function renderParetoRow(c, indent) {
-      const barPct = (c.totalSeconds / maxDuration * 100);
-      const color = catColors[c.category] || '#6b7c8e';
+    function renderRow(l, indent) {
+      const barPct = (l.totalSeconds / maxDuration * 100);
       const indentPx = indent * 20;
+      const typeIcon = l.type === 'state' ? '&#9208; ' : '&#9888; ';
+      const catLabel = l.type === 'cause'
+        ? Utils.CAUSE_CATEGORIES[l.category] || l.category
+        : Utils.STATE_CATEGORIES[l.category] ? Utils.STATE_CATEGORIES[l.category].label : l.category;
 
       return '<div class="pareto-row" style="padding-left:' + indentPx + 'px;">' +
         '<div class="pareto-label">' +
           (indent > 0 ? '<span class="pareto-indent">&#x251C; </span>' : '') +
-          '<span class="pareto-cause">' + Utils.escapeHtml(c.label) + '</span>' +
-          '<span class="pareto-cat">' + Utils.escapeHtml(Utils.CAUSE_CATEGORIES[c.category] || c.category) + '</span>' +
+          '<span class="pareto-cause">' + typeIcon + Utils.escapeHtml(l.label) + '</span>' +
+          '<span class="pareto-cat">' + Utils.escapeHtml(catLabel) + '</span>' +
         '</div>' +
         '<div class="pareto-bar-container">' +
-          '<div class="pareto-bar" style="width:' + barPct.toFixed(1) + '%;background:' + color + ';"></div>' +
+          '<div class="pareto-bar" style="width:' + barPct.toFixed(1) + '%;background:' + l.color + ';"></div>' +
         '</div>' +
         '<div class="pareto-values">' +
-          '<span class="pareto-duration">' + fmtDuration(c.totalSeconds) + '</span>' +
-          '<span class="pareto-count">' + c.occurrences + 'x</span>' +
+          '<span class="pareto-duration">' + fmtDuration(l.totalSeconds) + '</span>' +
+          '<span class="pareto-count">' + l.occurrences + 'x</span>' +
         '</div>' +
       '</div>';
     }
 
     let bars = '';
-    rootEntries.forEach(c => {
-      bars += renderParetoRow(c, 0);
-      // Render children sorted by duration
-      const children = (childrenOf[c.code] || []).sort((a, b) => b.totalSeconds - a.totalSeconds);
-      children.forEach(child => {
-        bars += renderParetoRow(child, 1);
-      });
+    rootLosses.forEach(l => {
+      bars += renderRow(l, 0);
+      const children = (childrenOf[l.key] || []).sort((a, b) => b.totalSeconds - a.totalSeconds);
+      children.forEach(child => bars += renderRow(child, 1));
     });
 
     return '<div class="analysis-section">' +
-      '<h3 class="analysis-title">Downtime Causes — Pareto</h3>' +
-      '<p class="analysis-hint">Sorted by total duration. Hierarchical cause grouping based on parent relationships.</p>' +
+      '<h3 class="analysis-title">Production Losses — Pareto</h3>' +
+      '<p class="analysis-hint">All non-producing time sorted by duration. ' +
+        '&#9208; = state category, &#9888; = downtime cause.</p>' +
       '<div class="pareto-chart">' + bars + '</div>' +
     '</div>';
   }
 
+  // ── Stop List (with cause editing) ────────────────────────
+  function _renderStopList(stopRecords, machine) {
+    const unplannedStops = stopRecords.filter(s =>
+      s.stateCategory === 'UNPLANNED_STOP' || (!s.isPlanned && s.stateCategory !== 'IDLE'));
+
+    if (unplannedStops.length === 0) {
+      return '<div class="analysis-section">' +
+        '<h3 class="analysis-title">Downtime Events</h3>' +
+        '<p class="analysis-hint">No unplanned downtime events for this period.</p></div>';
+    }
+
+    const fmtTime = (ms) => {
+      const d = new Date(ms);
+      return String(d.getHours()).padStart(2, '0') + ':' +
+        String(d.getMinutes()).padStart(2, '0') + ':' +
+        String(d.getSeconds()).padStart(2, '0');
+    };
+    const fmtDate = (ms) => {
+      const d = new Date(ms);
+      return d.toLocaleDateString() + ' ' + fmtTime(ms);
+    };
+
+    let rows = '';
+    unplannedStops.forEach(stop => {
+      const causeLabel = stop.segments.length > 0
+        ? stop.segments.map(s => Utils.escapeHtml(s.causeLabel)).join(', ')
+        : '<em style="color:#adb5bd;">No cause</em>';
+      const causeCount = stop.segments.length;
+      const splitBadge = causeCount > 1
+        ? ' <span class="tag tag-split">' + causeCount + ' causes</span>' : '';
+
+      rows += '<tr class="stop-row" data-stop-index="' + stop.index + '">' +
+        '<td><span class="state-dot" style="background:' + Utils.escapeHtml(stop.stateColor) + '"></span>' +
+          Utils.escapeHtml(stop.stateLabel) + '</td>' +
+        '<td>' + fmtDate(stop.startMs) + '</td>' +
+        '<td>' + fmtDate(stop.endMs) + '</td>' +
+        '<td>' + Utils.formatDuration(stop.durationSec) + '</td>' +
+        '<td>' + causeLabel + splitBadge + '</td>' +
+        '<td>' +
+          '<button class="btn-icon" onclick="OeeAnalysis.openStopEditor(' + stop.index + ')" title="Edit cause">&#9998;</button>' +
+        '</td>' +
+      '</tr>';
+    });
+
+    return '<div class="analysis-section">' +
+      '<h3 class="analysis-title">Downtime Events</h3>' +
+      '<p class="analysis-hint">Click &#9998; to assign, correct, or split causes.</p>' +
+      '<table class="config-table analysis-table">' +
+        '<thead><tr>' +
+          '<th>State</th><th>Start</th><th>End</th><th>Duration</th><th>Cause(s)</th><th></th>' +
+        '</tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table>' +
+    '</div>';
+  }
+
+  // ── Stop Editor (assign / correct / split causes) ─────────
+  function openStopEditor(stopIndex) {
+    const stop = _currentStopRecords[stopIndex];
+    if (!stop || !_currentMachine) return;
+
+    const modal = document.getElementById('modalStopEditor');
+    if (!modal) return;
+
+    const causeDefs = _currentMachine.causes || [];
+
+    // Populate stop info
+    const fmtDate = (ms) => new Date(ms).toLocaleString();
+    document.getElementById('stopEditorInfo').innerHTML =
+      '<strong>' + Utils.escapeHtml(stop.stateLabel) + '</strong>' +
+      '<br>' + fmtDate(stop.startMs) + ' — ' + fmtDate(stop.endMs) +
+      '<br>Duration: ' + Utils.formatDuration(stop.durationSec);
+
+    // Cause selector
+    const causeSelect = document.getElementById('stopEditorCause');
+    causeSelect.innerHTML = '<option value="">(no cause)</option>';
+    causeDefs.forEach(cd => {
+      const sel = (stop.segments.length > 0 && stop.segments[0].causeValue === cd.value) ? ' selected' : '';
+      causeSelect.innerHTML += '<option value="' + Utils.escapeHtml(cd.value) + '"' + sel + '>' +
+        Utils.escapeHtml(cd.value + ' — ' + cd.label) + '</option>';
+    });
+
+    // Split controls
+    const splitSection = document.getElementById('stopEditorSplitSection');
+    if (stop.durationSec > 60) {
+      splitSection.style.display = 'block';
+      const splitTime = document.getElementById('stopEditorSplitTime');
+      // Default split point: midpoint
+      const midMs = stop.startMs + (stop.endMs - stop.startMs) / 2;
+      const midDate = new Date(midMs);
+      splitTime.value = midDate.toISOString().slice(0, 16);
+      splitTime.min = new Date(stop.startMs + 1000).toISOString().slice(0, 16);
+      splitTime.max = new Date(stop.endMs - 1000).toISOString().slice(0, 16);
+
+      const cause2Select = document.getElementById('stopEditorCause2');
+      cause2Select.innerHTML = '<option value="">(no cause)</option>';
+      causeDefs.forEach(cd => {
+        cause2Select.innerHTML += '<option value="' + Utils.escapeHtml(cd.value) + '">' +
+          Utils.escapeHtml(cd.value + ' — ' + cd.label) + '</option>';
+      });
+    } else {
+      splitSection.style.display = 'none';
+    }
+
+    // Current segments display
+    const segList = document.getElementById('stopEditorSegments');
+    if (stop.segments.length > 0) {
+      segList.innerHTML = '<strong>Current cause segments:</strong><ul>' +
+        stop.segments.map(s =>
+          '<li>' + Utils.escapeHtml(s.causeLabel) + ' (' + Utils.formatDuration(s.durationSec) + ')' +
+          (s.source === 'manual' ? ' <em>[corrected]</em>' : '') + '</li>'
+        ).join('') + '</ul>';
+    } else {
+      segList.innerHTML = '<em>No cause assigned to this stop.</em>';
+    }
+
+    // Store stop index for save
+    document.getElementById('stopEditorIndex').value = String(stopIndex);
+
+    Utils.openModal('modalStopEditor');
+  }
+
+  async function saveStopCause() {
+    const stopIndex = parseInt(document.getElementById('stopEditorIndex').value);
+    const stop = _currentStopRecords[stopIndex];
+    if (!stop || !_currentMachine) return;
+
+    const causeValue = document.getElementById('stopEditorCause').value;
+    const causeDp = _currentMachine.causeDp;
+    if (!causeDp) {
+      Utils.toast('No cause datapoint configured for this machine', 'error');
+      return;
+    }
+
+    // Write cause correction at the stop start time
+    if (causeValue) {
+      await KPI.writeCorrection(causeDp, new Date(stop.startMs), parseInt(causeValue) || causeValue);
+      Utils.toast('Cause assigned', 'success');
+      if (typeof EventLog !== 'undefined') {
+        const causeDef = (_currentMachine.causes || []).find(c => c.value === causeValue);
+        EventLog.log('correction', 'causes',
+          _currentMachine.name, 'Cause ' + (causeDef ? causeDef.label : causeValue) + ' assigned to stop at ' + new Date(stop.startMs).toLocaleString());
+      }
+    }
+
+    Utils.closeModal('modalStopEditor');
+    refresh(); // Re-run analysis to show updated data
+  }
+
+  async function splitStopCause() {
+    const stopIndex = parseInt(document.getElementById('stopEditorIndex').value);
+    const stop = _currentStopRecords[stopIndex];
+    if (!stop || !_currentMachine) return;
+
+    const cause1Value = document.getElementById('stopEditorCause').value;
+    const cause2Value = document.getElementById('stopEditorCause2').value;
+    const splitTimeStr = document.getElementById('stopEditorSplitTime').value;
+    const splitTime = new Date(splitTimeStr);
+    const causeDp = _currentMachine.causeDp;
+
+    if (!causeDp) {
+      Utils.toast('No cause datapoint configured', 'error');
+      return;
+    }
+    if (!cause1Value || !cause2Value) {
+      Utils.toast('Select both causes for the split', 'error');
+      return;
+    }
+    if (splitTime.getTime() <= stop.startMs || splitTime.getTime() >= stop.endMs) {
+      Utils.toast('Split time must be within the stop period', 'error');
+      return;
+    }
+
+    // Write two corrections: cause1 at stop start, cause2 at split point
+    await KPI.writeCorrection(causeDp, new Date(stop.startMs), parseInt(cause1Value) || cause1Value);
+    await KPI.writeCorrection(causeDp, splitTime, parseInt(cause2Value) || cause2Value);
+
+    Utils.toast('Stop split with two causes', 'success');
+    if (typeof EventLog !== 'undefined') {
+      EventLog.log('correction', 'causes',
+        _currentMachine.name, 'Stop split at ' + splitTime.toLocaleString());
+    }
+
+    Utils.closeModal('modalStopEditor');
+    refresh();
+  }
+
   // ── Gantt Chart (SVG timeline) ──────────────────────────────
-  function _renderGanttChart(stateHistory, stateDefinitions, tRange) {
+  function _renderGanttChart(stateHistory, stateDefinitions, tRange, stopRecords) {
     const startMs = tRange.start.getTime();
     const endMs = tRange.end.getTime();
     const totalMs = endMs - startMs;
@@ -1060,10 +1443,21 @@ const OeeAnalysis = (() => {
         ? (durationSec / 3600).toFixed(1) + 'h'
         : durationSec >= 60 ? Math.floor(durationSec / 60) + 'min' : Math.floor(durationSec) + 's';
 
+      // Check if this segment is a clickable stop
+      let clickAttr = '';
+      if (stopRecords && info.category !== 'PRODUCING') {
+        const matchStop = stopRecords.find(s => Math.abs(s.startMs - segStartMs) < 1000);
+        if (matchStop) {
+          clickAttr = ' onclick="OeeAnalysis.openStopEditor(' + matchStop.index + ')" style="cursor:pointer;left:' +
+            xPct.toFixed(3) + '%;width:' + wPct.toFixed(3) + '%;background:' + Utils.escapeHtml(info.color) + ';"';
+        }
+      }
+
       segments += '<div class="gantt-segment" ' +
-        'style="left:' + xPct.toFixed(3) + '%;width:' + wPct.toFixed(3) + '%;background:' + Utils.escapeHtml(info.color) + ';" ' +
-        'title="' + Utils.escapeHtml(info.label) + ' (' + durLabel + ')\n' +
-          fmtDateTime(segStartMs) + ' — ' + fmtDateTime(segEndMs) + '">' +
+        (clickAttr || 'style="left:' + xPct.toFixed(3) + '%;width:' + wPct.toFixed(3) + '%;background:' + Utils.escapeHtml(info.color) + ';"') +
+        ' title="' + Utils.escapeHtml(info.label) + ' (' + durLabel + ')\n' +
+          fmtDateTime(segStartMs) + ' — ' + fmtDateTime(segEndMs) +
+          (clickAttr ? '\nClick to edit cause' : '') + '">' +
       '</div>';
     }
 
@@ -1565,5 +1959,9 @@ const OeeAnalysis = (() => {
     refreshMachineSelect();
   }
 
-  return { init, refresh, refreshMachineSelect, exportStatesCsv, exportCausesCsv, exportOeeCsv };
+  return {
+    init, refresh, refreshMachineSelect,
+    exportStatesCsv, exportCausesCsv, exportOeeCsv,
+    openStopEditor, saveStopCause, splitStopCause,
+  };
 })();

@@ -65,7 +65,9 @@ Source datapoint registration with metadata:
 
 - Define each state: value, label, OEE category, color, planned/unplanned flag
 - **Categories:** Producing, Idle, Planned Stop, Unplanned Stop, Setup, Maintenance
-- **Cause Tracking:** Optional downtime cause tracking with hierarchical parent-child relationships
+- **Cause Tracking:** Optional downtime cause tracking with numeric value mapping from cause DP
+- **Cause Value Mapping:** Each cause definition has a `value` field (e.g., 101, 201) that maps to the numeric code read from the cause datapoint — same model as state values
+- **Cause Hierarchy:** Parent-child relationships via `parentValue` for grouped analysis
 - **Cause Categories:** Mechanical, Electrical, Process, Operator, Quality, Supply
 - Default preset: 6 states + 9 causes pre-configured
 
@@ -146,20 +148,45 @@ Display-time aggregation (recomputed from source data each time):
 
 | View | Content |
 |------|---------|
-| Overview | OEE gauges (with limits coloring + previous period delta), TEEP/MTBF/MTTR cards, Gantt chart, ISO 22400 time model, state distribution, state table, cause Pareto |
+| Overview | OEE gauges (with limits coloring + previous period delta), TEEP/MTBF/MTTR cards, Gantt chart (clickable stops), ISO 22400 time model, state distribution, production losses Pareto, downtime events list, state table |
 | Time Comparison | Side-by-side OEE/MTBF/MTTR for yesterday, 7 days, 30 days |
 
 ### Gantt Chart
-SVG timeline showing each state transition as a colored segment. Hover for details.
+Timeline showing each state transition as a colored segment. Hover for details. Click on a non-producing segment to open the stop cause editor.
+
+### Production Losses Pareto
+Unified view combining all non-producing time:
+- **State categories** (Planned Stop, Idle, Setup, Maintenance) shown with their state duration
+- **Unplanned stop causes** broken down by individual cause from the cause DP value mapping
+- All entries sorted by total duration (highest losses first)
+- Hierarchical grouping via parent-child cause relationships
+
+### Downtime Events List
+Table of all unplanned stop events with: start/end time, duration, state, assigned cause(s). Click the edit icon to open the stop cause editor.
+
+### Stop-Cause Alignment
+State history and cause history are aligned at display time:
+- Each stop period is matched with the cause DP value(s) active during that period
+- If the cause DP value changes during a single stop, the stop is automatically split into multiple cause segments
+- In mock/simulation mode, cause codes are generated correlated with unplanned stop periods
 
 ### Time Model (ISO 22400)
 Hierarchical breakdown: Calendar Time → Planned Production / Planned Downtime → Net Production / Unplanned Downtime.
 
-## 7. Archive Correction
+## 7. Archive Correction & Cause Management
 
+### Archive Data Correction
 1. Load archive history for a period
 2. Apply corrections via `dpSetTimed(ts, dp:_corr.._value, value)`
 3. Trigger KPI recalculation — engines re-read via `_offline` and write corrected results
+
+### Post-Production Cause Assignment
+From the OEE Analysis page, operators can:
+1. **Assign a cause** to a stop that had none — select from the machine's cause list
+2. **Correct a cause** — change the assigned cause for a stop
+3. **Split a stop** — divide a stop at a chosen timestamp and assign two different causes
+   - Writes cause corrections to the cause DP archive at the stop start time and split point
+   - The analysis re-runs automatically to reflect the updated cause data
 
 ## 8. CSV Export
 

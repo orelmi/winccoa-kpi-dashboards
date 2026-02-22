@@ -897,6 +897,52 @@ input[type="color"] {
   margin-right: 2px;
 }
 
+/* ── Stop Editor ──────────────────────────────────────────── */
+.stop-editor-info {
+  background: var(--bg-alt);
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 10px;
+}
+
+.stop-editor-segments {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.stop-editor-segments ul {
+  margin: 4px 0 0 16px;
+  padding: 0;
+}
+
+.stop-editor-segments li { margin-bottom: 2px; }
+
+.stop-row { cursor: default; }
+.stop-row:hover { background: var(--bg-alt); }
+
+.tag-split {
+  background: #6f42c1;
+  color: white;
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+.gantt-segment[onclick] {
+  outline: 2px solid transparent;
+  transition: outline-color 0.2s;
+}
+
+.gantt-segment[onclick]:hover {
+  outline-color: var(--primary);
+  z-index: 2;
+}
+
 /* ── Analysis View Navigation ─────────────────────────────── */
 .analysis-view-nav {
   display: flex;

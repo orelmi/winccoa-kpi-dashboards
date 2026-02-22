@@ -38,15 +38,15 @@ const MachineStateConfig = (() => {
   ];
 
   const DEFAULT_CAUSES = [
-    { code: '1', label: 'Mechanical failure', category: 'MECHANICAL' },
-    { code: '2', label: 'Electrical failure', category: 'ELECTRICAL' },
-    { code: '3', label: 'Material jam', category: 'PROCESS' },
-    { code: '4', label: 'Operator error', category: 'OPERATOR' },
-    { code: '5', label: 'Quality issue', category: 'QUALITY' },
-    { code: '6', label: 'No material supply', category: 'SUPPLY' },
-    { code: '7', label: 'Shift break', category: 'PLANNED' },
-    { code: '8', label: 'Planned maintenance', category: 'PLANNED' },
-    { code: '0', label: 'Unknown / Other', category: 'OTHER' },
+    { value: '1', label: 'Mechanical failure', category: 'MECHANICAL', parentValue: null },
+    { value: '2', label: 'Electrical failure', category: 'ELECTRICAL', parentValue: null },
+    { value: '3', label: 'Material jam', category: 'PROCESS', parentValue: null },
+    { value: '4', label: 'Operator error', category: 'OPERATOR', parentValue: null },
+    { value: '5', label: 'Quality issue', category: 'QUALITY', parentValue: null },
+    { value: '6', label: 'No material supply', category: 'SUPPLY', parentValue: null },
+    { value: '7', label: 'Shift break', category: 'PLANNED', parentValue: null },
+    { value: '8', label: 'Planned maintenance', category: 'PLANNED', parentValue: null },
+    { value: '0', label: 'Unknown / Other', category: 'OTHER', parentValue: null },
   ];
 
   // ── Reusable state templates ──────────────────────────────
@@ -78,15 +78,15 @@ const MachineStateConfig = (() => {
         { value: '7', label: 'Breakdown', category: 'UNPLANNED_STOP', color: '#b02a37', isPlanned: false },
       ],
       causes: [
-        { code: '1', label: 'Mechanical failure', category: 'MECHANICAL' },
-        { code: '2', label: 'Electrical failure', category: 'ELECTRICAL' },
-        { code: '3', label: 'Sensor failure', category: 'ELECTRICAL' },
-        { code: '4', label: 'Material jam', category: 'PROCESS' },
-        { code: '5', label: 'Label misalignment', category: 'PROCESS' },
-        { code: '6', label: 'No material', category: 'SUPPLY' },
-        { code: '7', label: 'Operator error', category: 'OPERATOR' },
-        { code: '8', label: 'Quality reject', category: 'QUALITY' },
-        { code: '0', label: 'Unknown / Other', category: 'OTHER' },
+        { value: '1', label: 'Mechanical failure', category: 'MECHANICAL', parentValue: null },
+        { value: '2', label: 'Electrical failure', category: 'ELECTRICAL', parentValue: null },
+        { value: '3', label: 'Sensor failure', category: 'ELECTRICAL', parentValue: null },
+        { value: '4', label: 'Material jam', category: 'PROCESS', parentValue: null },
+        { value: '5', label: 'Label misalignment', category: 'PROCESS', parentValue: null },
+        { value: '6', label: 'No material', category: 'SUPPLY', parentValue: null },
+        { value: '7', label: 'Operator error', category: 'OPERATOR', parentValue: null },
+        { value: '8', label: 'Quality reject', category: 'QUALITY', parentValue: null },
+        { value: '0', label: 'Unknown / Other', category: 'OTHER', parentValue: null },
       ],
     },
     'CNC': {
@@ -101,12 +101,12 @@ const MachineStateConfig = (() => {
         { value: '6', label: 'Maintenance', category: 'MAINTENANCE', color: '#17a2b8', isPlanned: true },
       ],
       causes: [
-        { code: '1', label: 'Tool breakage', category: 'MECHANICAL' },
-        { code: '2', label: 'Spindle error', category: 'MECHANICAL' },
-        { code: '3', label: 'Axis error', category: 'ELECTRICAL' },
-        { code: '4', label: 'Program error', category: 'PROCESS' },
-        { code: '5', label: 'Material defect', category: 'QUALITY' },
-        { code: '0', label: 'Unknown', category: 'OTHER' },
+        { value: '1', label: 'Tool breakage', category: 'MECHANICAL', parentValue: null },
+        { value: '2', label: 'Spindle error', category: 'MECHANICAL', parentValue: null },
+        { value: '3', label: 'Axis error', category: 'ELECTRICAL', parentValue: null },
+        { value: '4', label: 'Program error', category: 'PROCESS', parentValue: null },
+        { value: '5', label: 'Material defect', category: 'QUALITY', parentValue: null },
+        { value: '0', label: 'Unknown', category: 'OTHER', parentValue: null },
       ],
     },
   };
@@ -273,16 +273,16 @@ const MachineStateConfig = (() => {
         return '<option value="' + key + '"' + sel + '>' + label + '</option>';
       }).join('');
 
-      // Parent code selector — allows building a tree of causes
+      // Parent selector — allows building a tree of causes
       const parentOptions = '<option value="">(root)</option>' +
-        allCauses.filter(pc => pc.code !== c.code).map(pc => {
-          const sel = c.parentCode === pc.code ? ' selected' : '';
-          return '<option value="' + Utils.escapeHtml(pc.code) + '"' + sel + '>' +
-            Utils.escapeHtml(pc.code + ' — ' + pc.label) + '</option>';
+        allCauses.filter(pc => pc.value !== c.value).map(pc => {
+          const sel = c.parentValue === pc.value ? ' selected' : '';
+          return '<option value="' + Utils.escapeHtml(pc.value) + '"' + sel + '>' +
+            Utils.escapeHtml(pc.value + ' — ' + pc.label) + '</option>';
         }).join('');
 
       return '<tr>' +
-        '<td><input type="text" class="cause-code" value="' + Utils.escapeHtml(c.code) + '" style="width:60px;padding:4px 6px;font-size:12px;"></td>' +
+        '<td><input type="text" class="cause-value" value="' + Utils.escapeHtml(c.value) + '" style="width:60px;padding:4px 6px;font-size:12px;"></td>' +
         '<td><input type="text" class="cause-label" value="' + Utils.escapeHtml(c.label) + '" style="width:140px;padding:4px 6px;font-size:12px;"></td>' +
         '<td><select class="cause-cat" style="padding:4px 6px;font-size:12px;">' + catOptions + '</select></td>' +
         '<td><select class="cause-parent" style="padding:4px 6px;font-size:12px;">' + parentOptions + '</select></td>' +
@@ -298,17 +298,17 @@ const MachineStateConfig = (() => {
     }).join('');
 
     // Build parent options from existing rows
-    const existingCodes = Array.from(tbody.querySelectorAll('.cause-code')).map(input => ({
-      code: input.value.trim(),
+    const existingCauses = Array.from(tbody.querySelectorAll('.cause-value')).map(input => ({
+      value: input.value.trim(),
       label: input.closest('tr').querySelector('.cause-label').value.trim(),
-    })).filter(c => c.code);
+    })).filter(c => c.value);
     const parentOptions = '<option value="">(root)</option>' +
-      existingCodes.map(pc => '<option value="' + Utils.escapeHtml(pc.code) + '">' +
-        Utils.escapeHtml(pc.code + ' — ' + pc.label) + '</option>').join('');
+      existingCauses.map(pc => '<option value="' + Utils.escapeHtml(pc.value) + '">' +
+        Utils.escapeHtml(pc.value + ' — ' + pc.label) + '</option>').join('');
 
     const tr = document.createElement('tr');
     tr.innerHTML =
-      '<td><input type="text" class="cause-code" value="" placeholder="Code" style="width:60px;padding:4px 6px;font-size:12px;"></td>' +
+      '<td><input type="text" class="cause-value" value="" placeholder="101" style="width:60px;padding:4px 6px;font-size:12px;"></td>' +
       '<td><input type="text" class="cause-label" value="" placeholder="Cause label" style="width:140px;padding:4px 6px;font-size:12px;"></td>' +
       '<td><select class="cause-cat" style="padding:4px 6px;font-size:12px;">' + catOptions + '</select></td>' +
       '<td><select class="cause-parent" style="padding:4px 6px;font-size:12px;">' + parentOptions + '</select></td>' +
@@ -335,10 +335,10 @@ const MachineStateConfig = (() => {
   function _collectCausesFromModal() {
     const rows = document.querySelectorAll('#causeDefBody tr');
     return Array.from(rows).map(row => ({
-      code: row.querySelector('.cause-code').value.trim(),
+      value: row.querySelector('.cause-value').value.trim(),
       label: row.querySelector('.cause-label').value.trim(),
       category: row.querySelector('.cause-cat').value,
-      parentCode: row.querySelector('.cause-parent') ? row.querySelector('.cause-parent').value || null : null,
+      parentValue: row.querySelector('.cause-parent') ? row.querySelector('.cause-parent').value || null : null,
     })).filter(c => c.label);
   }
 

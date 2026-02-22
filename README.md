@@ -10,13 +10,14 @@ Inspired by Siemens Performance Insight (Industrial Edge).
 - **Asset Organization** — Hierarchical plant structure (Site > Area > Line > Machine) with context-based filtering, calendar inheritance, and configuration linking
 - **Source Configuration** — Register WinCC OA datapoints with type, characterization, archiving, and validity limits
 - **KPI Aggregation** — 10 aggregation methods (Sum, Avg, Min, Max, Delta, Time-Weighted Avg, Flow Rate, Uptime Ratio, StdDev, Count) with calendar-aligned or sliding periods
-- **Machine State Configuration** — Define machine states with OEE categories, colors, and downtime cause tracking (hierarchical cause tree)
+- **Machine State Configuration** — Define machine states with OEE categories, colors, and downtime cause tracking with numeric value mapping (hierarchical cause tree)
 - **Production Calendar** — Shift schedules (days/times), exception days (holidays, shutdowns), with optional MES/ERP connectors (SAP PP, SQL Database, CSV Import, OPC UA, REST API)
 - **OEE Calculation** — Availability x Performance x Quality, with TEEP, MTBF, MTTR
-- **Live Analysis** — Display-time OEE gauges, Gantt chart, ISO 22400 time model, state distribution, cause Pareto, time comparison
+- **Live Analysis** — Display-time OEE gauges, Gantt chart, ISO 22400 time model, state distribution, production losses Pareto (mixed states + causes), downtime event list, time comparison
 - **KPI Limits** — Warning/alarm thresholds with visual indicators for OEE, Availability, Performance, Quality, MTBF, MTTR
 - **Microstop Filtering** — Configurable duration threshold to exclude short stops from OEE availability
 - **Archive Correction** — View/correct archived values with KPI recalculation trigger
+- **Downtime Cause Management** — Assign/correct causes post-production, split stops across multiple causes, cause-to-stop alignment from cause DP values
 - **CSV Export** — Download state analysis, cause analysis, OEE summary
 - **Dashboard Gantt Compatibility** — Export mapping tables for WinCC OA Dashboard Gantt Chart widget
 - **Asset Context Filtering** — All configuration pages filter by active asset context; context filter bar with "Show all" reset
@@ -32,7 +33,7 @@ Inspired by Siemens Performance Insight (Industrial Edge).
 - Step Time Analysis (sequence/batch step tracking)
 - Histogram / Boxplot Widgets (statistical distribution)
 - Report Generation (scheduled Excel/CSV/PDF with email)
-- Post-Production Reason Editing (reclassify causes after the fact)
+- Post-Production Reason Editing (bulk reclassification with approval workflow)
 
 ## Quick Start
 

@@ -80,7 +80,9 @@ Use the **Browse** button to select datapoints from the WinCC OA DP tree.
 3. **Optionally apply a template** from the dropdown (Standard 6-State, Simple 3-State, Packaging, CNC, or custom)
 4. Enter the machine name and state datapoint
 5. Add/modify state definitions (value, label, category, color)
-6. Optionally enable cause tracking and define causes
+6. Optionally enable cause tracking:
+   - Set the **Cause Datapoint** (DP that contains numeric cause codes)
+   - Define causes with **Value** (numeric code matching the DP), label, category, and optional parent
 7. Click **Save Machine**
 
 ### Saving Custom Templates
@@ -112,8 +114,21 @@ After configuring states and causes, click **Save as Template** in the modal to 
 2. Select a machine and time period
 3. Click **Refresh**
 4. View:
-   - **Overview:** OEE gauges, Gantt chart, time model, state table, cause Pareto
+   - **Overview:** OEE gauges, Gantt chart, time model, production losses Pareto, downtime events, state table
    - **Time Comparison:** Side-by-side period comparison
+
+### Assigning & Correcting Downtime Causes
+
+From the OEE Analysis overview, there are two ways to edit causes:
+
+1. **From the Gantt chart:** Click a non-producing (stop) segment — the stop editor opens
+2. **From the Downtime Events table:** Click the pencil icon on any event
+
+In the stop editor:
+- **Assign/Change Cause:** Select a cause from the dropdown, click **Save Cause**
+- **Split Stop:** Set a split timestamp and assign a second cause, click **Split & Save**
+
+After saving, the analysis re-runs automatically to reflect the updated cause data.
 
 ### KPI Roll-Up (Multi-Machine)
 

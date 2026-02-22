@@ -182,15 +182,15 @@ const DemoSeed = (() => {
   ];
 
   const defaultCauses = [
-    { id: 'c1', value: 101, label: 'Motor failure',     category: 'MECHANICAL', parentId: null },
-    { id: 'c2', value: 102, label: 'Belt breakage',     category: 'MECHANICAL', parentId: null },
-    { id: 'c3', value: 201, label: 'Sensor fault',      category: 'ELECTRICAL', parentId: null },
-    { id: 'c4', value: 202, label: 'PLC error',         category: 'ELECTRICAL', parentId: null },
-    { id: 'c5', value: 301, label: 'Material jam',      category: 'PROCESS',    parentId: null },
-    { id: 'c6', value: 302, label: 'Label misfeed',     category: 'PROCESS',    parentId: null },
-    { id: 'c7', value: 401, label: 'Operator error',    category: 'OPERATOR',   parentId: null },
-    { id: 'c8', value: 501, label: 'Defective material',category: 'QUALITY',    parentId: null },
-    { id: 'c9', value: 601, label: 'No material supply',category: 'SUPPLY',     parentId: null },
+    { value: '101', label: 'Motor failure',      category: 'MECHANICAL', parentValue: null },
+    { value: '102', label: 'Belt breakage',      category: 'MECHANICAL', parentValue: '101' },
+    { value: '201', label: 'Sensor fault',       category: 'ELECTRICAL', parentValue: null },
+    { value: '202', label: 'PLC error',          category: 'ELECTRICAL', parentValue: null },
+    { value: '301', label: 'Material jam',       category: 'PROCESS',    parentValue: null },
+    { value: '302', label: 'Label misfeed',      category: 'PROCESS',    parentValue: '301' },
+    { value: '401', label: 'Operator error',     category: 'OPERATOR',   parentValue: null },
+    { value: '501', label: 'Defective material', category: 'QUALITY',    parentValue: null },
+    { value: '601', label: 'No material supply', category: 'SUPPLY',     parentValue: null },
   ];
 
   const machines = [
