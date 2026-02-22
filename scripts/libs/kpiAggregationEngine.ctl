@@ -2,10 +2,18 @@
  * kpiAggregationEngine.ctl
  * ═══════════════════════════════════════════════════════════════
  * WinCC OA CTRL script — KPI Aggregation Engine
+ *
  * Reads KPI configurations from DPs, computes aggregations
  * periodically, and writes results to target DPs.
  *
- * This script runs as a CTRL manager or is triggered by a timer.
+ * CORRECTION SUPPORT:
+ *   - All archive reads use _offline.._value which transparently
+ *     returns _correction.._value if it exists, else _original.
+ *   - When a recalculation request is received (source corrected),
+ *     the engine recomputes KPIs and writes corrected results
+ *     via dpSetTimed() into _correction.._value of the target DPs.
+ *   - This way _offline queries on KPI DPs also return corrected
+ *     results without touching the original historized values.
  * ═══════════════════════════════════════════════════════════════
  */
 
@@ -14,6 +22,7 @@
 // ── Constants ────────────────────────────────────────────────
 const string CONFIG_DP_SOURCES      = "KPI_Config.sources";
 const string CONFIG_DP_AGGREGATIONS = "KPI_Config.aggregations";
+const string CONFIG_DP_RECALC       = "KPI_Config.recalcRequest";
 
 // Aggregation period durations in seconds
 mapping PERIOD_SECONDS;
@@ -30,12 +39,116 @@ void main()
 
   DebugN("[KPI Engine] Aggregation engine started");
 
+  // Monitor recalculation requests
+  dpConnect("onRecalcRequest", CONFIG_DP_RECALC);
+
   // Main loop — runs every 60 seconds
   while (true)
   {
     processAggregations();
     delay(60);
   }
+}
+
+// ══════════════════════════════════════════════════════════════
+// Recalculation request handler
+// Triggered when a source DP has been corrected and KPIs need
+// to be recomputed for the corrected period.
+// ══════════════════════════════════════════════════════════════
+void onRecalcRequest(string dp, string jsonStr)
+{
+  if (jsonStr == "") return;
+
+  anytype parsed;
+  int rc = jsonDecode(jsonStr, parsed);
+  if (rc != 0)
+  {
+    DebugN("[KPI Engine] ERROR: Failed to parse recalc request");
+    return;
+  }
+
+  mapping request = parsed;
+  string sourceId = request["sourceId"];
+  string sourceDp = request["sourceDp"];
+  string periodStartStr = request["periodStart"];
+  string periodEndStr = request["periodEnd"];
+  dyn_string aggIds = request["aggregationIds"];
+
+  DebugN("[KPI Engine] Recalculation request for source: " + sourceDp);
+  DebugN("[KPI Engine]   Period: " + periodStartStr + " to " + periodEndStr);
+  DebugN("[KPI Engine]   Aggregations: " + dynlen(aggIds));
+
+  // Parse ISO dates
+  time tStart, tEnd;
+  // ISO 8601 parsing
+  sscanf(periodStartStr, "%*4d-%*2d-%*2dT%*2d:%*2d", tStart);
+  sscanf(periodEndStr, "%*4d-%*2d-%*2dT%*2d:%*2d", tEnd);
+
+  // Fallback: use last 24h if parse fails
+  if (tStart == 0) tStart = getCurrentTime() - 86400;
+  if (tEnd == 0) tEnd = getCurrentTime();
+
+  dyn_mapping sources = loadJsonConfig(CONFIG_DP_SOURCES);
+  dyn_mapping aggregations = loadJsonConfig(CONFIG_DP_AGGREGATIONS);
+
+  // Find the source config
+  mapping source;
+  bool foundSource = false;
+  for (int j = 1; j <= dynlen(sources); j++)
+  {
+    if (sources[j]["id"] == sourceId)
+    {
+      source = sources[j];
+      foundSource = true;
+      break;
+    }
+  }
+
+  if (!foundSource)
+  {
+    DebugN("[KPI Engine] Recalc: source not found: " + sourceId);
+    return;
+  }
+
+  // Process each affected aggregation
+  for (int a = 1; a <= dynlen(aggIds); a++)
+  {
+    string aggId = aggIds[a];
+
+    for (int i = 1; i <= dynlen(aggregations); i++)
+    {
+      if (aggregations[i]["id"] != aggId) continue;
+
+      mapping agg = aggregations[i];
+      int periodSec;
+      if (agg["periodType"] == "SLIDING")
+        periodSec = agg["slidingSeconds"];
+      else
+        periodSec = PERIOD_SECONDS[agg["alignment"]];
+      if (periodSec <= 0) periodSec = 3600;
+
+      // Recompute using _offline (which now returns corrections)
+      float result;
+      bool ok = computeAggregationForPeriod(
+        source["dpSource"], agg["method"], tStart, tEnd,
+        source["characterization"], agg["expression"], result);
+
+      if (ok)
+      {
+        string targetDp = agg["dpTarget"];
+        // Write corrected result using dpSetTimed to _correction
+        // This preserves the original KPI value in _original
+        // and _offline will now return the corrected KPI
+        time calcTime = tEnd; // Use period end as correction timestamp
+        dpSetTimed(calcTime, targetDp + ":_correction.._value", result);
+        DebugN("[KPI Engine] Recalc: " + agg["name"] + " = " + result +
+               " (written to _correction at " + calcTime + ")");
+      }
+      break;
+    }
+  }
+
+  DebugN("[KPI Engine] Recalculation complete");
 }
 
 // ── Load JSON config from DP ──────────────────────────────────
@@ -49,7 +162,6 @@ dyn_mapping loadJsonConfig(string dpName)
   if (jsonStr == "")
     return result;
 
-  // Parse JSON
   int rc;
   anytype parsed;
   rc = jsonDecode(jsonStr, parsed);
@@ -108,15 +220,20 @@ void processAggregations()
 
     if (periodSec <= 0) periodSec = 3600;
 
-    // Compute aggregation
+    time tEnd = getCurrentTime();
+    time tStart = tEnd - periodSec;
+
+    // Compute aggregation — uses _offline which returns corrected
+    // values transparently when they exist
     float result;
-    bool ok = computeAggregation(source["dpSource"], agg["method"],
-                                  periodSec, source["characterization"],
-                                  agg["expression"], result);
+    bool ok = computeAggregationForPeriod(source["dpSource"], agg["method"],
+                                           tStart, tEnd,
+                                           source["characterization"],
+                                           agg["expression"], result);
 
     if (ok)
     {
-      // Write result to target DP
+      // Write result to target DP (normal periodic write)
       string targetDp = agg["dpTarget"];
       if (dpExists(targetDp))
       {
@@ -131,15 +248,16 @@ void processAggregations()
   }
 }
 
-// ── Compute a single aggregation ──────────────────────────────
-bool computeAggregation(string sourceDp, string method, int periodSec,
-                         string characterization, string expression,
-                         float &result)
+// ── Compute a single aggregation for a given period ───────────
+// All archive reads use _offline.._value which automatically
+// returns _correction if present, else _original.
+bool computeAggregationForPeriod(string sourceDp, string method,
+                                  time tStart, time tEnd,
+                                  string characterization, string expression,
+                                  float &result)
 {
-  time tEnd = getCurrentTime();
-  time tStart = tEnd - periodSec;
-
-  // Query archive data
+  // Query archive via _offline — transparently returns corrected
+  // values where _correction exists, else _original
   dyn_dyn_anytype queryResult;
   string query = "SELECT '_offline.._value', '_offline.._stime' FROM '" +
                  sourceDp + "' TIMERANGE(\"" +
@@ -163,6 +281,8 @@ bool computeAggregation(string sourceDp, string method, int periodSec,
     dynAppend(values, (float)queryResult[i][1]);
     dynAppend(timestamps, (time)queryResult[i][2]);
   }
+
+  int periodSec = (int)(period(tEnd) - period(tStart));
 
   // Apply method
   if (method == "SUM")
@@ -308,7 +428,6 @@ float calcTimeWeightedAvg(dyn_float values, dyn_time timestamps,
 float calcUptimeRatio(dyn_float values, dyn_time timestamps,
                        time tStart, time tEnd)
 {
-  // Uptime = fraction of time where value > 0 (or == 1 for bool)
   if (dynlen(values) == 0) return 0;
 
   float uptimeSeconds = 0;
@@ -347,12 +466,9 @@ float calcStdDev(dyn_float values)
 }
 
 // ── Simple expression evaluator ───────────────────────────────
-// Supports: delta, sum, avg, min, max, count, periodSeconds, result
 float evalExpression(string expr, float currentResult,
                       dyn_float values, int periodSec)
 {
-  // Replace variables with values
-  // This is a simplified evaluator — for production, use a proper parser
   float delta_val = 0;
   if (dynlen(values) >= 2)
     delta_val = values[dynlen(values)] - values[1];
@@ -366,7 +482,6 @@ float evalExpression(string expr, float currentResult,
   strreplace(expr, "periodSeconds", (string)periodSec);
   strreplace(expr, "result", (string)currentResult);
 
-  // Evaluate basic arithmetic (WinCC OA built-in)
   float evalResult;
   evalScript(evalResult, "float main() { return " + expr + "; }");
   return evalResult;

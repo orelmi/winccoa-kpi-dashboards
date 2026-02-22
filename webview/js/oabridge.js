@@ -2,6 +2,12 @@
    oabridge.js — Abstraction layer for WinCC OA oaJS API
    Provides a unified interface with automatic mock/simulation mode
    when oaJS is not available (development outside WinCC OA).
+
+   Archive correction model:
+     _original.._value   — raw archived value (written by archiving)
+     _correction.._value — corrected value (written via dpSetTimed)
+     _offline.._value    — abstraction: returns _correction if exists,
+                           else _original. Used for all queries.
    ═══════════════════════════════════════════════════════════════ */
 
 const OABridge = (() => {
@@ -13,6 +19,7 @@ const OABridge = (() => {
   let _mode = 'mock'; // 'live' | 'mock'
   let _mockStore = {};
   let _mockDpTree = [];
+  let _mockCorrections = {}; // dp -> [{time, value}, ...]
   let _connectCallbacks = [];
 
   // ── Initialize ──────────────────────────────────────────────
@@ -69,6 +76,116 @@ const OABridge = (() => {
       dpValuePairs.forEach(([dp, val]) => { _mockStore[dp] = val; });
       return Promise.resolve();
     }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // dpSetTimed — Write a value at a specific timestamp
+  // Used for archive corrections: writes to _correction.._value
+  //
+  // WinCC OA signature:
+  //   dpSetTimed(time t, string dp1, value1 [, dp2, value2, ...])
+  //
+  // For corrections:
+  //   dpSetTimed(timestamp, dpName + ":_correction.._value", newValue)
+  // ══════════════════════════════════════════════════════════════
+  function dpSetTimed(timestamp, dp, value) {
+    if (_mode === 'live') {
+      return new Promise((resolve, reject) => {
+        try {
+          oaJS.dpSetTimed(timestamp, dp, value, (err) => {
+            if (err) reject(new Error('dpSetTimed failed: ' + err));
+            else resolve();
+          });
+        } catch (e) { reject(e); }
+      });
+    } else {
+      // Mock: store correction
+      const key = dp.replace(':_correction.._value', '').replace(':_offline.._value', '');
+      if (!_mockCorrections[key]) _mockCorrections[key] = [];
+      _mockCorrections[key].push({
+        time: timestamp instanceof Date ? timestamp.getTime() : timestamp,
+        value: value,
+      });
+      // Sort by time
+      _mockCorrections[key].sort((a, b) => a.time - b.time);
+      // Persist to localStorage
+      localStorage.setItem('kpi_corrections', JSON.stringify(_mockCorrections));
+      console.log('[OABridge][Mock] dpSetTimed correction:', key, '@', new Date(timestamp), '=', value);
+      return Promise.resolve();
+    }
+  }
+
+  // ── dpSetTimedMultiple — Multiple timed writes ──────────────
+  function dpSetTimedMultiple(timestamp, dpValuePairs) {
+    if (_mode === 'live') {
+      return new Promise((resolve, reject) => {
+        // Build flat args array: time, dp1, val1, dp2, val2, ...
+        const args = [timestamp];
+        dpValuePairs.forEach(([dp, val]) => { args.push(dp, val); });
+        try {
+          oaJS.dpSetTimed(...args, (err) => {
+            if (err) reject(new Error('dpSetTimedMultiple failed: ' + err));
+            else resolve();
+          });
+        } catch (e) { reject(e); }
+      });
+    } else {
+      dpValuePairs.forEach(([dp, val]) => {
+        const key = dp.replace(':_correction.._value', '').replace(':_offline.._value', '');
+        if (!_mockCorrections[key]) _mockCorrections[key] = [];
+        _mockCorrections[key].push({
+          time: timestamp instanceof Date ? timestamp.getTime() : timestamp,
+          value: val,
+        });
+      });
+      localStorage.setItem('kpi_corrections', JSON.stringify(_mockCorrections));
+      return Promise.resolve();
+    }
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // writeCorrection — High-level helper for archive correction
+  // Writes a corrected value at a specific timestamp.
+  // _offline queries will then transparently return this value
+  // instead of the original.
+  // ══════════════════════════════════════════════════════════════
+  function writeCorrection(dpName, timestamp, correctedValue) {
+    const corrDp = dpName + ':_correction.._value';
+    return dpSetTimed(timestamp, corrDp, correctedValue);
+  }
+
+  // ── queryOriginalValues — Query _original archive only ──────
+  function queryOriginalValues(dpName, tStart, tEnd) {
+    const fmt = (d) => {
+      const t = d instanceof Date ? d : new Date(d);
+      const pad = (n) => String(n).padStart(2, '0');
+      return t.getFullYear() + '.' + pad(t.getMonth() + 1) + '.' + pad(t.getDate()) + ' ' +
+             pad(t.getHours()) + ':' + pad(t.getMinutes()) + ':' + pad(t.getSeconds());
+    };
+    const query = "SELECT '_original.._value', '_original.._stime' FROM '" +
+                  dpName + "' TIMERANGE(\"" + fmt(tStart) + "\",\"" + fmt(tEnd) + "\",1,0)";
+    return dpQuery(query);
+  }
+
+  // ── queryCorrectionValues — Query _correction archive only ──
+  function queryCorrectionValues(dpName, tStart, tEnd) {
+    const fmt = (d) => {
+      const t = d instanceof Date ? d : new Date(d);
+      const pad = (n) => String(n).padStart(2, '0');
+      return t.getFullYear() + '.' + pad(t.getMonth() + 1) + '.' + pad(t.getDate()) + ' ' +
+             pad(t.getHours()) + ':' + pad(t.getMinutes()) + ':' + pad(t.getSeconds());
+    };
+    const query = "SELECT '_correction.._value', '_correction.._stime' FROM '" +
+                  dpName + "' TIMERANGE(\"" + fmt(tStart) + "\",\"" + fmt(tEnd) + "\",1,0)";
+    return dpQuery(query);
+  }
+
+  // ── getCorrections — Get mock corrections for a DP ──────────
+  function getCorrections(dpName) {
+    if (_mode === 'mock') {
+      return _mockCorrections[dpName] || [];
+    }
+    return []; // In live mode, query _correction directly
   }
 
   // ── dpGet — Read a value from a datapoint ───────────────────
@@ -197,8 +314,6 @@ const OABridge = (() => {
   }
 
   // ── Config persistence via DPs ──────────────────────────────
-  // Stores configuration as JSON strings in dedicated DPs
-
   const CONFIG_DP_PREFIX = 'KPI_Config.';
 
   function saveConfig(section, data) {
@@ -253,6 +368,12 @@ const OABridge = (() => {
         _mockStore[CONFIG_DP_PREFIX + section] = stored;
       }
     });
+
+    // Pre-load persisted corrections from localStorage
+    const storedCorr = localStorage.getItem('kpi_corrections');
+    if (storedCorr) {
+      try { _mockCorrections = JSON.parse(storedCorr); } catch (e) { /* ignore */ }
+    }
   }
 
   function _mockQuery(query) {
@@ -286,6 +407,12 @@ const OABridge = (() => {
     getMode,
     dpSet,
     dpSetMultiple,
+    dpSetTimed,
+    dpSetTimedMultiple,
+    writeCorrection,
+    queryOriginalValues,
+    queryCorrectionValues,
+    getCorrections,
     dpGet,
     dpGetMultiple,
     dpQuery,

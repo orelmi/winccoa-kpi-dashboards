@@ -15,6 +15,7 @@ TypeName
 "aggregations"	1	25	# string — JSON array of aggregation configs
 "machines"	1	25	# string — JSON array of machine configs
 "oee"	1	25	# string — JSON array of OEE configs
+"recalcRequest"	1	25	# string — JSON recalc request (triggers KPI/OEE recomputation)
 
 # ── Datapoint Type: KPI_Result ─────────────────────────────────
 # Stores a single aggregation KPI result

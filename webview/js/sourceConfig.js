@@ -59,6 +59,7 @@ const SourceConfig = (() => {
         '<td>' + Utils.escapeHtml(src.unit || '-') + '</td>' +
         '<td>' + archBadge + '</td>' +
         '<td class="actions">' +
+          '<button class="btn-icon" onclick="CorrectionManager.openForSource(\'' + src.id + '\')" title="Correct data">&#128269;</button>' +
           '<button class="btn-icon" onclick="SourceConfig.edit(\'' + src.id + '\')" title="Edit">&#9998;</button>' +
           '<button class="btn-icon danger" onclick="SourceConfig.remove(\'' + src.id + '\')" title="Delete">&#128465;</button>' +
         '</td></tr>';

@@ -150,6 +150,9 @@ const App = (() => {
     // Initialize display-time analysis module
     OeeAnalysis.init();
 
+    // Initialize correction manager
+    CorrectionManager.init();
+
     console.log('[App] KPI Configuration initialized (' + mode + ' mode)');
   }
 
