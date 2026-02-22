@@ -19,7 +19,7 @@ python3 -m http.server 8080 --directory webview
 # then open http://localhost:8080
 ```
 
-Simulation mode is automatically enabled when `oaJS` is not detected. Data is persisted in `localStorage`.
+Simulation mode is automatically enabled when `oaJsApi` is not detected. Data is persisted in `localStorage`.
 
 ### 2. WinCC OA Integration
 
@@ -29,7 +29,11 @@ Simulation mode is automatically enabled when `oaJS` is not detected. Data is pe
 2. **Import** > select `dplist/kpi_dptypes.dpl`
 3. Verify that the types `KPI_Config`, `KPI_Result`, and `KPI_OEE_Result` are created
 
-#### b) Copy files into the WinCC OA project
+#### b) Enable the WinCC OA Web Server
+
+The `oaJsApi` library requires an active web server. Add a CTRL manager with parameter `webclient_http.ctl` in the Console, or drag-drop the file onto the Console.
+
+#### c) Copy files into the WinCC OA project
 
 ```
 <WinCC_OA_Project>/
@@ -39,13 +43,16 @@ Simulation mode is automatically enabled when `oaJS` is not detected. Data is pe
 │   └── libs/
 │       ├── kpiAggregationEngine.ctl  ← copy from scripts/libs/
 │       └── kpiOeeEngine.ctl          ← copy from scripts/libs/
-└── webview/                   ← copy the entire folder
-    ├── index.html
-    ├── css/style.css
-    └── js/*.js
+└── data/
+    └── webview/               ← copy the webview/ folder here
+        ├── index.html
+        ├── css/style.css
+        └── js/*.js
 ```
 
-#### c) Configure CTRL managers
+> **Note:** The `webview/` folder must be placed under the `data/` directory so the WinCC OA web server can serve it. The panel loads it via `loadSnippet("/webview/index.html")`.
+
+#### d) Configure CTRL managers
 
 In the WinCC OA **Console**, add two CTRL managers:
 
@@ -54,10 +61,11 @@ In the WinCC OA **Console**, add two CTRL managers:
 | CTRL Manager 1 | `scripts/libs/kpiAggregationEngine.ctl` |
 | CTRL Manager 2 | `scripts/libs/kpiOeeEngine.ctl` |
 
-#### d) Open the panel
+#### e) Open the panel
 
 - Open `panels/kpiWebView.pnl` in GEDI or the Vision module
-- The HTML page loads in the WebView widget and communicates via `oaJS`
+- The panel calls `loadSnippet("/webview/index.html")` which loads the HTML into the WebView EWO and injects the `oaJsApi` library
+- The `messageReceived` handler in the panel processes `dpSetTimed` and `dpCreate` commands from JavaScript (these are not available in `oaJsApi` directly)
 
 ---
 
@@ -68,7 +76,7 @@ webview/
 ├── index.html            # Main page (Single Page App)
 ├── css/style.css         # Industrial theme
 └── js/
-    ├── oabridge.js       # oaJS abstraction layer + mock mode
+    ├── oabridge.js       # oaJsApi abstraction layer + mock mode
     ├── utils.js          # Helpers, constants, formatting
     ├── sourceConfig.js   # Data source configuration
     ├── aggregationConfig.js  # KPI aggregation configuration
@@ -239,31 +247,38 @@ The system integrates the WinCC OA archive correction mechanism:
 
 ---
 
-## oaJS Communication
+## oaJsApi Communication
 
-The HTML page communicates with WinCC OA via the `oaJS` JavaScript API provided by the WebView widget:
+The HTML page communicates with WinCC OA via the `oaJsApi` library, which is injected by `loadSnippet()` in the WebView EWO. The `OABridge` module wraps `oaJsApi` into a Promise-based interface:
 
 ```javascript
-// Read a DP
+// Read a DP — oaJsApi.dpGet(dp, {success, error})
 OABridge.dpGet("KPI_Config.sources").then(value => { ... });
 
-// Write a DP
+// Write a DP — oaJsApi.dpSet(dp, value, {success, error})
 OABridge.dpSet("KPI_Config.sources", jsonString);
 
-// DP query (browse)
+// DP query — oaJsApi.dpQuery(query, {success, error})
 OABridge.dpQuery("SELECT '_online.._value' FROM '*'");
 
-// Real-time subscription
-OABridge.dpConnect("System1:Plant.Water.Counter", (value) => { ... });
+// Browse datapoints — oaJsApi.dpNames(pattern, type, {success, error})
+OABridge.browseDatapoints("Plant.*");
 
-// Archive value correction (dpSetTimed)
+// Real-time subscription — oaJsApi.dpConnect(dpNames, answer, {success, error})
+OABridge.dpConnect("System1:Plant.Water.Counter:_online.._value", (data) => { ... });
+
+// Archive value correction — oaJsApi.toCtrl → panel CTRL dpSetTimed
 OABridge.writeCorrection("System1:Plant.Water.Counter", timestamp, 123.45);
-// Equivalent to: dpSetTimed(timestamp, "System1:Plant.Water.Counter:_corr.._value", 123.45)
+// Panel CTRL executes: dpSetTimed(ts, "System1:Plant.Water.Counter:_corr.._value", 123.45)
 
-// Read original vs corrected archive
+// Read original vs corrected archive — oaJsApi.dpQuery with TIMERANGE
 OABridge.queryOriginalValues(dp, tStart, tEnd);     // SELECT '_original.._value' ...
 OABridge.queryCorrectionValues(dp, tStart, tEnd);    // SELECT '_corr.._value' ...
 // All standard reads use _offline (returns correction if present)
 ```
 
-In simulation mode (outside WinCC OA), calls are intercepted and replaced by a mock using `localStorage`.
+**Functions not in oaJsApi** (delegated to panel CTRL via `oaJsApi.toCtrl` + `messageReceived`):
+- `dpSetTimed` — archive correction writes
+- `dpCreate` — datapoint creation
+
+In simulation mode (outside WinCC OA), all calls are intercepted and replaced by a mock using `localStorage`.

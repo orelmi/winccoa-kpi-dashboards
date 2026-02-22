@@ -1,20 +1,26 @@
 /* ═══════════════════════════════════════════════════════════════
-   oabridge.js — Abstraction layer for WinCC OA oaJS API
-   Provides a unified interface with automatic mock/simulation mode
-   when oaJS is not available (development outside WinCC OA).
+   oabridge.js — Abstraction layer for WinCC OA oaJsApi
+   Provides a unified Promise-based interface with automatic
+   mock/simulation mode when oaJsApi is not available.
+
+   In live mode (loaded via loadSnippet in WebView EWO), uses the
+   oaJsApi library with its {success, error} callback pattern.
+   See: https://www.winccoa.com/documentation/WinCCOA/3.18/en_US/oaJsApi/oaJsApi.html
 
    Archive correction model:
      _original.._value   — raw archived value (written by archiving)
      _corr.._value       — corrected value (written via dpSetTimed)
-     _offline.._value    — abstraction: returns _corr if exists,
-                           else _original. Used for all queries.
+     _offline.._value    — virtual config: returns _corr if exists,
+                           else _original. Used for all standard reads.
    ═══════════════════════════════════════════════════════════════ */
 
 const OABridge = (() => {
   'use strict';
 
   // ── Detection ───────────────────────────────────────────────
-  const isOaJsAvailable = () => typeof oaJS !== 'undefined' && oaJS !== null;
+  // oaJsApi is injected by loadSnippet() in the WebView EWO.
+  const isOaJsAvailable = () =>
+    typeof oaJsApi !== 'undefined' && oaJsApi !== null;
 
   let _mode = 'mock'; // 'live' | 'mock'
   let _mockStore = {};
@@ -26,11 +32,11 @@ const OABridge = (() => {
   function init() {
     if (isOaJsAvailable()) {
       _mode = 'live';
-      console.log('[OABridge] Connected to WinCC OA via oaJS');
+      console.log('[OABridge] Connected to WinCC OA via oaJsApi');
     } else {
       _mode = 'mock';
       _initMockData();
-      console.log('[OABridge] Running in SIMULATION mode (no oaJS detected)');
+      console.log('[OABridge] Running in SIMULATION mode (no oaJsApi detected)');
     }
     _connectCallbacks.forEach(cb => cb(_mode));
     return _mode;
@@ -42,16 +48,45 @@ const OABridge = (() => {
 
   function getMode() { return _mode; }
 
-  // ── dpSet — Write a value to a datapoint ────────────────────
+  // ══════════════════════════════════════════════════════════════
+  // dpGet — Read a value from a datapoint
+  //
+  // oaJsApi.dpGet(dpeName, {success(data), error()})
+  // ══════════════════════════════════════════════════════════════
+  function dpGet(dp) {
+    return new Promise((resolve, reject) => {
+      if (_mode === 'live') {
+        oaJsApi.dpGet(dp, {
+          success: function(data) { resolve(data); },
+          error: function() { reject(new Error('dpGet failed: ' + dp)); }
+        });
+      } else {
+        resolve(_mockStore[dp] !== undefined ? _mockStore[dp] : null);
+      }
+    });
+  }
+
+  // ── dpGetMultiple — Read multiple DPs ───────────────────────
+  function dpGetMultiple(dps) {
+    if (_mode === 'live') {
+      return Promise.all(dps.map(dp => dpGet(dp)));
+    }
+    const result = dps.map(dp => _mockStore[dp] !== undefined ? _mockStore[dp] : null);
+    return Promise.resolve(result);
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // dpSet — Write a value to a datapoint
+  //
+  // oaJsApi.dpSet(dpeName, value, {success(), error()})
+  // ══════════════════════════════════════════════════════════════
   function dpSet(dp, value) {
     return new Promise((resolve, reject) => {
       if (_mode === 'live') {
-        try {
-          oaJS.dpSet(dp, value, (err) => {
-            if (err) reject(new Error('dpSet failed: ' + err));
-            else resolve();
-          });
-        } catch (e) { reject(e); }
+        oaJsApi.dpSet(dp, value, {
+          success: function() { resolve(); },
+          error: function() { reject(new Error('dpSet failed: ' + dp)); }
+        });
       } else {
         _mockStore[dp] = value;
         resolve();
@@ -59,88 +94,72 @@ const OABridge = (() => {
     });
   }
 
-  // ── dpSetMultiple — Write multiple DPs at once ──────────────
+  // ── dpSetMultiple — Write multiple DPs ──────────────────────
   function dpSetMultiple(dpValuePairs) {
     if (_mode === 'live') {
-      return new Promise((resolve, reject) => {
-        const dps = dpValuePairs.map(p => p[0]);
-        const vals = dpValuePairs.map(p => p[1]);
-        try {
-          oaJS.dpSet(dps, vals, (err) => {
-            if (err) reject(new Error('dpSetMultiple failed: ' + err));
-            else resolve();
-          });
-        } catch (e) { reject(e); }
-      });
-    } else {
-      dpValuePairs.forEach(([dp, val]) => { _mockStore[dp] = val; });
-      return Promise.resolve();
+      return Promise.all(dpValuePairs.map(p => dpSet(p[0], p[1])));
     }
+    dpValuePairs.forEach(p => { _mockStore[p[0]] = p[1]; });
+    return Promise.resolve();
   }
 
   // ══════════════════════════════════════════════════════════════
   // dpSetTimed — Write a value at a specific timestamp
   // Used for archive corrections: writes to _corr.._value
   //
-  // WinCC OA signature:
-  //   dpSetTimed(time t, string dp1, value1 [, dp2, value2, ...])
-  //
-  // For corrections:
-  //   dpSetTimed(timestamp, dpName + ":_corr.._value", newValue)
+  // dpSetTimed is NOT available in oaJsApi. In live mode we
+  // delegate to the panel CTRL script via oaJsApi.toCtrl().
+  // The panel's messageReceived handler calls the real
+  // CTRL dpSetTimed(time, dp, value).
   // ══════════════════════════════════════════════════════════════
   function dpSetTimed(timestamp, dp, value) {
     if (_mode === 'live') {
       return new Promise((resolve, reject) => {
-        try {
-          oaJS.dpSetTimed(timestamp, dp, value, (err) => {
-            if (err) reject(new Error('dpSetTimed failed: ' + err));
-            else resolve();
-          });
-        } catch (e) { reject(e); }
+        const ts = timestamp instanceof Date
+          ? timestamp.toISOString()
+          : String(timestamp);
+        oaJsApi.toCtrl({
+          cmd: 'dpSetTimed',
+          timestamp: ts,
+          dp: dp,
+          value: value
+        }, {
+          success: function() { resolve(); },
+          error: function() {
+            reject(new Error('dpSetTimed failed (toCtrl): ' + dp));
+          }
+        });
       });
-    } else {
-      // Mock: store correction
-      const key = dp.replace(':_corr.._value', '').replace(':_offline.._value', '');
-      if (!_mockCorrections[key]) _mockCorrections[key] = [];
-      _mockCorrections[key].push({
-        time: timestamp instanceof Date ? timestamp.getTime() : timestamp,
-        value: value,
-      });
-      // Sort by time
-      _mockCorrections[key].sort((a, b) => a.time - b.time);
-      // Persist to localStorage
-      localStorage.setItem('kpi_corrections', JSON.stringify(_mockCorrections));
-      console.log('[OABridge][Mock] dpSetTimed correction:', key, '@', new Date(timestamp), '=', value);
-      return Promise.resolve();
     }
+    // Mock: store correction
+    const key = dp.replace(':_corr.._value', '').replace(':_offline.._value', '');
+    if (!_mockCorrections[key]) _mockCorrections[key] = [];
+    _mockCorrections[key].push({
+      time: timestamp instanceof Date ? timestamp.getTime() : timestamp,
+      value: value,
+    });
+    _mockCorrections[key].sort((a, b) => a.time - b.time);
+    localStorage.setItem('kpi_corrections', JSON.stringify(_mockCorrections));
+    console.log('[OABridge][Mock] dpSetTimed correction:', key,
+      '@', new Date(timestamp), '=', value);
+    return Promise.resolve();
   }
 
   // ── dpSetTimedMultiple — Multiple timed writes ──────────────
   function dpSetTimedMultiple(timestamp, dpValuePairs) {
     if (_mode === 'live') {
-      return new Promise((resolve, reject) => {
-        // Build flat args array: time, dp1, val1, dp2, val2, ...
-        const args = [timestamp];
-        dpValuePairs.forEach(([dp, val]) => { args.push(dp, val); });
-        try {
-          oaJS.dpSetTimed(...args, (err) => {
-            if (err) reject(new Error('dpSetTimedMultiple failed: ' + err));
-            else resolve();
-          });
-        } catch (e) { reject(e); }
-      });
-    } else {
-      dpValuePairs.forEach(([dp, val]) => {
-        const key = dp.replace(':_corr.._value', '').replace(':_offline.._value', '');
-        if (!_mockCorrections[key]) _mockCorrections[key] = [];
-        _mockCorrections[key].push({
-          time: timestamp instanceof Date ? timestamp.getTime() : timestamp,
-          value: val,
-        });
-      });
-      localStorage.setItem('kpi_corrections', JSON.stringify(_mockCorrections));
-      return Promise.resolve();
+      return Promise.all(dpValuePairs.map(p => dpSetTimed(timestamp, p[0], p[1])));
     }
+    dpValuePairs.forEach(p => {
+      const key = p[0].replace(':_corr.._value', '').replace(':_offline.._value', '');
+      if (!_mockCorrections[key]) _mockCorrections[key] = [];
+      _mockCorrections[key].push({
+        time: timestamp instanceof Date ? timestamp.getTime() : timestamp,
+        value: p[1],
+      });
+    });
+    localStorage.setItem('kpi_corrections', JSON.stringify(_mockCorrections));
+    return Promise.resolve();
   }
 
   // ══════════════════════════════════════════════════════════════
@@ -154,29 +173,37 @@ const OABridge = (() => {
     return dpSetTimed(timestamp, corrDp, correctedValue);
   }
 
+  // ══════════════════════════════════════════════════════════════
+  // dpQuery — Execute a SQL-like DP query
+  //
+  // oaJsApi.dpQuery(queryString, {success(data), error()})
+  // ══════════════════════════════════════════════════════════════
+  function dpQuery(query) {
+    return new Promise((resolve, reject) => {
+      if (_mode === 'live') {
+        oaJsApi.dpQuery(query, {
+          success: function(data) { resolve(data); },
+          error: function() { reject(new Error('dpQuery failed')); }
+        });
+      } else {
+        resolve(_mockQuery(query));
+      }
+    });
+  }
+
   // ── queryOriginalValues — Query _original archive only ──────
   function queryOriginalValues(dpName, tStart, tEnd) {
-    const fmt = (d) => {
-      const t = d instanceof Date ? d : new Date(d);
-      const pad = (n) => String(n).padStart(2, '0');
-      return t.getFullYear() + '.' + pad(t.getMonth() + 1) + '.' + pad(t.getDate()) + ' ' +
-             pad(t.getHours()) + ':' + pad(t.getMinutes()) + ':' + pad(t.getSeconds());
-    };
     const query = "SELECT '_original.._value', '_original.._stime' FROM '" +
-                  dpName + "' TIMERANGE(\"" + fmt(tStart) + "\",\"" + fmt(tEnd) + "\",1,0)";
+      dpName + "' TIMERANGE(\"" + _fmtOaTime(tStart) + "\",\"" +
+      _fmtOaTime(tEnd) + "\",1,0)";
     return dpQuery(query);
   }
 
   // ── queryCorrectionValues — Query _corr archive only ────────
   function queryCorrectionValues(dpName, tStart, tEnd) {
-    const fmt = (d) => {
-      const t = d instanceof Date ? d : new Date(d);
-      const pad = (n) => String(n).padStart(2, '0');
-      return t.getFullYear() + '.' + pad(t.getMonth() + 1) + '.' + pad(t.getDate()) + ' ' +
-             pad(t.getHours()) + ':' + pad(t.getMinutes()) + ':' + pad(t.getSeconds());
-    };
     const query = "SELECT '_corr.._value', '_corr.._stime' FROM '" +
-                  dpName + "' TIMERANGE(\"" + fmt(tStart) + "\",\"" + fmt(tEnd) + "\",1,0)";
+      dpName + "' TIMERANGE(\"" + _fmtOaTime(tStart) + "\",\"" +
+      _fmtOaTime(tEnd) + "\",1,0)";
     return dpQuery(query);
   }
 
@@ -188,129 +215,108 @@ const OABridge = (() => {
     return []; // In live mode, query _corr directly
   }
 
-  // ── dpGet — Read a value from a datapoint ───────────────────
-  function dpGet(dp) {
-    return new Promise((resolve, reject) => {
-      if (_mode === 'live') {
-        try {
-          oaJS.dpGet(dp, (err, value) => {
-            if (err) reject(new Error('dpGet failed: ' + err));
-            else resolve(value);
-          });
-        } catch (e) { reject(e); }
-      } else {
-        resolve(_mockStore[dp] !== undefined ? _mockStore[dp] : null);
-      }
-    });
-  }
-
-  // ── dpGetMultiple — Read multiple DPs ───────────────────────
-  function dpGetMultiple(dps) {
-    if (_mode === 'live') {
-      return new Promise((resolve, reject) => {
-        try {
-          oaJS.dpGet(dps, (err, values) => {
-            if (err) reject(new Error('dpGetMultiple failed: ' + err));
-            else resolve(values);
-          });
-        } catch (e) { reject(e); }
-      });
-    } else {
-      const result = dps.map(dp => _mockStore[dp] !== undefined ? _mockStore[dp] : null);
-      return Promise.resolve(result);
-    }
-  }
-
-  // ── dpQuery — Execute a DP query ────────────────────────────
-  function dpQuery(query) {
-    return new Promise((resolve, reject) => {
-      if (_mode === 'live') {
-        try {
-          oaJS.dpQuery(query, (err, result) => {
-            if (err) reject(new Error('dpQuery failed: ' + err));
-            else resolve(result);
-          });
-        } catch (e) { reject(e); }
-      } else {
-        resolve(_mockQuery(query));
-      }
-    });
-  }
-
-  // ── dpConnect — Subscribe to value changes ──────────────────
+  // ══════════════════════════════════════════════════════════════
+  // dpConnect — Subscribe to value changes (hotlink)
+  //
+  // oaJsApi.dpConnect(dpNames, answer, {success(data), error()})
+  //   dpNames: string[] — DP element names to subscribe to
+  //   answer:  boolean  — true = receive current value immediately
+  //   success: called on EVERY value change (not just once)
+  //
+  // Returns dpNames array as handle for dpDisconnect.
+  // ══════════════════════════════════════════════════════════════
   function dpConnect(dp, callback) {
     if (_mode === 'live') {
-      try {
-        return oaJS.dpConnect(dp, callback);
-      } catch (e) {
-        console.error('[OABridge] dpConnect error:', e);
-        return null;
-      }
-    } else {
-      console.log('[OABridge][Mock] dpConnect on:', dp);
-      return { dp, callback, _mockId: Date.now() };
+      const dpNames = Array.isArray(dp) ? dp : [dp];
+      oaJsApi.dpConnect(dpNames, false, {
+        success: function(data) { callback(data); },
+        error: function() {
+          console.error('[OABridge] dpConnect error for:', dp);
+        }
+      });
+      return dpNames; // handle for dpDisconnect
     }
+    console.log('[OABridge][Mock] dpConnect on:', dp);
+    return { dp: dp, callback: callback, _mockId: Date.now() };
   }
 
   // ── dpDisconnect ────────────────────────────────────────────
+  // oaJsApi.dpDisconnect(dpNames, {success(), error()})
+  // dpNames must be in the same order as in dpConnect.
   function dpDisconnect(handle) {
     if (_mode === 'live' && handle) {
-      try { oaJS.dpDisconnect(handle); } catch (e) { /* ignore */ }
+      const dpNames = Array.isArray(handle) ? handle : [handle];
+      oaJsApi.dpDisconnect(dpNames, {
+        success: function() {},
+        error: function() {}
+      });
     }
   }
 
-  // ── dpExists — Check if a DP exists ─────────────────────────
+  // ══════════════════════════════════════════════════════════════
+  // dpExists — Check if a DP exists
+  //
+  // Not directly in oaJsApi; uses dpNames pattern match.
+  // oaJsApi.dpNames(pattern, dpType, {success(data), error()})
+  // ══════════════════════════════════════════════════════════════
   function dpExists(dp) {
     if (_mode === 'live') {
       return new Promise((resolve, reject) => {
-        try {
-          oaJS.dpExists(dp, (err, exists) => {
-            if (err) reject(err);
-            else resolve(exists);
-          });
-        } catch (e) { reject(e); }
+        oaJsApi.dpNames(dp, '', {
+          success: function(data) {
+            resolve(Array.isArray(data) && data.length > 0);
+          },
+          error: function() { reject(new Error('dpExists check failed: ' + dp)); }
+        });
       });
-    } else {
-      return Promise.resolve(dp in _mockStore || _mockDpTree.some(d => d.startsWith(dp)));
     }
+    return Promise.resolve(
+      dp in _mockStore || _mockDpTree.some(d => d.startsWith(dp))
+    );
   }
 
-  // ── dpCreate — Create a new DP ──────────────────────────────
+  // ── dpCreate — Create a new DP (via toCtrl to panel CTRL) ──
+  // Not in oaJsApi; delegates to panel CTRL via toCtrl.
   function dpCreate(dpName, dpType) {
     if (_mode === 'live') {
       return new Promise((resolve, reject) => {
-        try {
-          oaJS.dpCreate(dpName, dpType, (err) => {
-            if (err) reject(new Error('dpCreate failed: ' + err));
-            else resolve();
-          });
-        } catch (e) { reject(e); }
-      });
-    } else {
-      _mockDpTree.push(dpName);
-      return Promise.resolve();
-    }
-  }
-
-  // ── Browse available DPs (for the DP browser) ───────────────
-  function browseDatapoints(filter) {
-    if (_mode === 'live') {
-      const query = filter
-        ? `SELECT '_online.._value' FROM '${filter}*'`
-        : `SELECT '_online.._value' FROM '*'`;
-      return dpQuery(query).then(result => {
-        if (!result || result.length < 2) return [];
-        return result.slice(1).map(row => {
-          const fullDp = row[0];
-          return fullDp.replace(':_online.._value', '').replace('_online.._value', '');
+        oaJsApi.toCtrl({
+          cmd: 'dpCreate',
+          dpName: dpName,
+          dpType: dpType
+        }, {
+          success: function() { resolve(); },
+          error: function() {
+            reject(new Error('dpCreate failed (toCtrl): ' + dpName));
+          }
         });
       });
-    } else {
-      const items = _mockDpTree.filter(dp =>
-        !filter || dp.toLowerCase().includes(filter.toLowerCase())
-      );
-      return Promise.resolve(items);
     }
+    _mockDpTree.push(dpName);
+    return Promise.resolve();
+  }
+
+  // ══════════════════════════════════════════════════════════════
+  // browseDatapoints — List DPs matching a filter
+  //
+  // oaJsApi.dpNames(pattern, dpType, {success(data), error()})
+  // ══════════════════════════════════════════════════════════════
+  function browseDatapoints(filter) {
+    if (_mode === 'live') {
+      const pattern = filter ? '*' + filter + '*' : '*';
+      return new Promise((resolve, reject) => {
+        oaJsApi.dpNames(pattern, '', {
+          success: function(data) {
+            resolve(Array.isArray(data) ? data : []);
+          },
+          error: function() { reject(new Error('dpNames browse failed')); }
+        });
+      });
+    }
+    const items = _mockDpTree.filter(dp =>
+      !filter || dp.toLowerCase().includes(filter.toLowerCase())
+    );
+    return Promise.resolve(items);
   }
 
   // ── Config persistence via DPs ──────────────────────────────
@@ -319,6 +325,9 @@ const OABridge = (() => {
   function saveConfig(section, data) {
     const dp = CONFIG_DP_PREFIX + section;
     const jsonStr = JSON.stringify(data);
+    if (_mode === 'mock') {
+      localStorage.setItem('kpi_config_' + section, jsonStr);
+    }
     return dpSet(dp, jsonStr);
   }
 
@@ -329,6 +338,15 @@ const OABridge = (() => {
       try { return JSON.parse(val); }
       catch (e) { return null; }
     });
+  }
+
+  // ── Time formatting for WinCC OA queries ──────────────────
+  function _fmtOaTime(d) {
+    const t = d instanceof Date ? d : new Date(d);
+    const pad = (n) => String(n).padStart(2, '0');
+    return t.getFullYear() + '.' + pad(t.getMonth() + 1) + '.' +
+      pad(t.getDate()) + ' ' + pad(t.getHours()) + ':' +
+      pad(t.getMinutes()) + ':' + pad(t.getSeconds());
   }
 
   // ── Mock Data ───────────────────────────────────────────────
@@ -377,7 +395,6 @@ const OABridge = (() => {
   }
 
   function _mockQuery(query) {
-    // Simplified mock query parser
     const matchFrom = query.match(/FROM\s+'([^']+)'/i);
     if (!matchFrom) return [['dp']];
 
@@ -389,15 +406,6 @@ const OABridge = (() => {
       }
     });
     return results;
-  }
-
-  // Mock mode: also persist to localStorage for development
-  const _origSaveConfig = saveConfig;
-  function saveConfigWithFallback(section, data) {
-    if (_mode === 'mock') {
-      localStorage.setItem('kpi_config_' + section, JSON.stringify(data));
-    }
-    return _origSaveConfig(section, data);
   }
 
   // ── Public API ──────────────────────────────────────────────
@@ -421,7 +429,7 @@ const OABridge = (() => {
     dpExists,
     dpCreate,
     browseDatapoints,
-    saveConfig: saveConfigWithFallback,
+    saveConfig,
     loadConfig,
     CONFIG_DP_PREFIX,
   };
