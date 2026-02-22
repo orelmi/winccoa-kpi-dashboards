@@ -102,7 +102,7 @@ void onRecalcRequest(string dp, string jsonStr)
     float quality      = calcQuality(oee, sources, tStart, tEnd);
     float oeeValue     = availability * performance * quality;
 
-    // Write corrected results via dpSetTimed to _correction
+    // Write corrected results via dpSetTimed to _corr
     string prefix = oee["targetDp"];
     if (prefix == "") prefix = "KPI_OEE." + oee["name"];
 
@@ -117,13 +117,13 @@ void onRecalcRequest(string dp, string jsonStr)
            "% P=" + (performance*100) +
            "% Q=" + (quality*100) +
            "% OEE=" + (oeeValue*100) +
-           "% (written to _correction at " + calcTime + ")");
+           "% (written to _corr at " + calcTime + ")");
   }
 
   DebugN("[OEE Engine] Recalculation complete");
 }
 
-// ── Write corrected result via dpSetTimed to _correction ─────
+// ── Write corrected result via dpSetTimed to _corr ───────────
 void writeCorrectedResult(string dpName, float value, time calcTime)
 {
   strreplace(dpName, " ", "_");
@@ -135,7 +135,7 @@ void writeCorrectedResult(string dpName, float value, time calcTime)
     return;
   }
 
-  dpSetTimed(calcTime, dpName + ":_correction.._value", value);
+  dpSetTimed(calcTime, dpName + ":_corr.._value", value);
 }
 
 // ── Load JSON config ──────────────────────────────────────────

@@ -3,8 +3,8 @@
    ═══════════════════════════════════════════════════════════════
    WinCC OA archive model:
      _original.._value   — raw value written by archiving
-     _correction.._value — corrected value written via dpSetTimed()
-     _offline.._value    — abstraction: returns _correction if
+     _corr.._value       — corrected value written via dpSetTimed()
+     _offline.._value    — abstraction: returns _corr if
                            present, else _original
 
    This module lets operators:
@@ -91,7 +91,7 @@ const CorrectionManager = (() => {
     }
   }
 
-  // ── Live mode: query _original and _correction in parallel ──
+  // ── Live mode: query _original and _corr in parallel ────────
   async function _loadLiveHistory(dp, tStart, tEnd) {
     const [origResult, corrResult] = await Promise.all([
       OABridge.queryOriginalValues(dp, tStart, tEnd),
@@ -193,7 +193,7 @@ const CorrectionManager = (() => {
   }
 
   // ── Trigger KPI recalculation for the corrected period ──────
-  // Writes recalculated KPI results to _correction.._value
+  // Writes recalculated KPI results to _corr.._value
   // so that _offline reads return the corrected KPI values.
   async function triggerRecalculation() {
     const statusEl = document.getElementById('corrRecalcStatus');
@@ -211,16 +211,22 @@ const CorrectionManager = (() => {
       const aggregations = AggregationConfig.getAll();
       const affectedAggs = aggregations.filter(a => a.sourceRef === _currentSourceId && a.enabled);
 
-      if (affectedAggs.length === 0) {
-        statusEl.innerHTML = '<span class="text-muted">No active aggregations reference this source.</span>';
+      // Find all OEE configs that reference this source (pieces, good, reject)
+      const oeeConfigs = OeeConfig.getAll();
+      const affectedOees = oeeConfigs.filter(o => o.enabled && (
+        o.piecesSourceRef === _currentSourceId ||
+        o.goodSourceRef === _currentSourceId ||
+        o.rejectSourceRef === _currentSourceId
+      ));
+
+      if (affectedAggs.length === 0 && affectedOees.length === 0) {
+        statusEl.innerHTML = '<span class="text-muted">No active aggregations or OEE configs reference this source.</span>';
         return;
       }
 
-      // In live mode: call a CTRL function or write a recalc request DP
-      // In mock mode: just indicate what would happen
+      // In live mode: write recalc request to DP
+      // Both CTRL engines (aggregation + OEE) monitor this DP
       if (OABridge.getMode() === 'live') {
-        // Write recalculation request to a DP
-        // The CTRL engine monitors this DP and triggers recalc
         const recalcRequest = JSON.stringify({
           sourceId: _currentSourceId,
           sourceDp: _currentDp,
@@ -232,17 +238,26 @@ const CorrectionManager = (() => {
         await OABridge.dpSet('KPI_Config.recalcRequest', recalcRequest);
       }
 
-      const aggNames = affectedAggs.map(a => a.name);
+      // Build status display
+      let details = '';
+      if (affectedAggs.length > 0) {
+        details += 'Affected KPIs: <strong>' + affectedAggs.map(a => a.name).join(', ') + '</strong><br>';
+      }
+      if (affectedOees.length > 0) {
+        details += 'Affected OEE: <strong>' + affectedOees.map(o => o.name).join(', ') + '</strong><br>';
+      }
+
+      const totalCount = affectedAggs.length + affectedOees.length;
       statusEl.innerHTML =
         '<span class="tag tag-enabled">Recalculation requested</span>' +
         '<p style="margin-top:6px;font-size:12px;">' +
-          'Affected KPIs: <strong>' + aggNames.join(', ') + '</strong><br>' +
+          details +
           'Period: ' + _fmtTime(tStart) + ' — ' + _fmtTime(tEnd) + '<br>' +
-          'The CTRL engine will recompute these KPIs from <code>_offline</code> (which now includes corrections) ' +
-          'and write results into <code>_correction.._value</code> of the target DPs.' +
+          'The CTRL engines will recompute from <code>_offline</code> (which now includes corrections) ' +
+          'and write results into <code>_corr.._value</code> of the target DPs.' +
         '</p>';
 
-      Utils.toast(affectedAggs.length + ' KPI(s) marked for recalculation', 'success');
+      Utils.toast(totalCount + ' KPI/OEE config(s) marked for recalculation', 'success');
     } catch (err) {
       statusEl.innerHTML = '<span style="color:#d9363e;">Error: ' + Utils.escapeHtml(err.message) + '</span>';
     }

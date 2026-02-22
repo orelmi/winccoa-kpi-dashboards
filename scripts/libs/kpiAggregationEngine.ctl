@@ -8,10 +8,10 @@
  *
  * CORRECTION SUPPORT:
  *   - All archive reads use _offline.._value which transparently
- *     returns _correction.._value if it exists, else _original.
+ *     returns _corr.._value if it exists, else _original.
  *   - When a recalculation request is received (source corrected),
  *     the engine recomputes KPIs and writes corrected results
- *     via dpSetTimed() into _correction.._value of the target DPs.
+ *     via dpSetTimed() into _corr.._value of the target DPs.
  *   - This way _offline queries on KPI DPs also return corrected
  *     results without touching the original historized values.
  * ═══════════════════════════════════════════════════════════════
@@ -136,13 +136,13 @@ void onRecalcRequest(string dp, string jsonStr)
       if (ok)
       {
         string targetDp = agg["dpTarget"];
-        // Write corrected result using dpSetTimed to _correction
+        // Write corrected result using dpSetTimed to _corr
         // This preserves the original KPI value in _original
         // and _offline will now return the corrected KPI
         time calcTime = tEnd; // Use period end as correction timestamp
-        dpSetTimed(calcTime, targetDp + ":_correction.._value", result);
+        dpSetTimed(calcTime, targetDp + ":_corr.._value", result);
         DebugN("[KPI Engine] Recalc: " + agg["name"] + " = " + result +
-               " (written to _correction at " + calcTime + ")");
+               " (written to _corr at " + calcTime + ")");
       }
       break;
     }
@@ -250,14 +250,14 @@ void processAggregations()
 
 // ── Compute a single aggregation for a given period ───────────
 // All archive reads use _offline.._value which automatically
-// returns _correction if present, else _original.
+// returns _corr if present, else _original.
 bool computeAggregationForPeriod(string sourceDp, string method,
                                   time tStart, time tEnd,
                                   string characterization, string expression,
                                   float &result)
 {
   // Query archive via _offline — transparently returns corrected
-  // values where _correction exists, else _original
+  // values where _corr exists, else _original
   dyn_dyn_anytype queryResult;
   string query = "SELECT '_offline.._value', '_offline.._stime' FROM '" +
                  sourceDp + "' TIMERANGE(\"" +

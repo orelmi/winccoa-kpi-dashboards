@@ -633,7 +633,7 @@
           <p>Source: <strong id="corrSourceName"></strong></p>
           <p>Datapoint: <code id="corrDpName"></code></p>
           <p class="form-hint">
-            Corrections are written via <code>dpSetTimed</code> to <code>_correction.._value</code>.
+            Corrections are written via <code>dpSetTimed</code> to <code>_corr.._value</code>.
             Archive queries on <code>_offline.._value</code> will then return the corrected value
             instead of the original.
           </p>
@@ -678,7 +678,7 @@
           <legend>Apply Correction</legend>
           <p class="form-hint">
             Write a corrected value at a specific timestamp.
-            Uses <code>dpSetTimed(time, dp:_correction.._value, value)</code>.
+            Uses <code>dpSetTimed(time, dp:_corr.._value, value)</code>.
           </p>
           <div class="form-row">
             <div class="form-group">
@@ -701,7 +701,7 @@
           <p class="form-hint">
             After correcting source values, trigger KPI recalculation for the affected period.
             The engine will re-read via <code>_offline</code> (returns corrected values) and write
-            the recalculated KPI results into <code>_correction.._value</code> of the target DPs.
+            the recalculated KPI results into <code>_corr.._value</code> of the target DPs.
           </p>
           <button type="button" class="btn btn-secondary" id="btnCorrRecalc">Recalculate KPIs for this period</button>
           <div id="corrRecalcStatus" style="margin-top:10px;"></div>

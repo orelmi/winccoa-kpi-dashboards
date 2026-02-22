@@ -5,8 +5,8 @@
 
    Archive correction model:
      _original.._value   — raw archived value (written by archiving)
-     _correction.._value — corrected value (written via dpSetTimed)
-     _offline.._value    — abstraction: returns _correction if exists,
+     _corr.._value       — corrected value (written via dpSetTimed)
+     _offline.._value    — abstraction: returns _corr if exists,
                            else _original. Used for all queries.
    ═══════════════════════════════════════════════════════════════ */
 
@@ -80,13 +80,13 @@ const OABridge = (() => {
 
   // ══════════════════════════════════════════════════════════════
   // dpSetTimed — Write a value at a specific timestamp
-  // Used for archive corrections: writes to _correction.._value
+  // Used for archive corrections: writes to _corr.._value
   //
   // WinCC OA signature:
   //   dpSetTimed(time t, string dp1, value1 [, dp2, value2, ...])
   //
   // For corrections:
-  //   dpSetTimed(timestamp, dpName + ":_correction.._value", newValue)
+  //   dpSetTimed(timestamp, dpName + ":_corr.._value", newValue)
   // ══════════════════════════════════════════════════════════════
   function dpSetTimed(timestamp, dp, value) {
     if (_mode === 'live') {
@@ -100,7 +100,7 @@ const OABridge = (() => {
       });
     } else {
       // Mock: store correction
-      const key = dp.replace(':_correction.._value', '').replace(':_offline.._value', '');
+      const key = dp.replace(':_corr.._value', '').replace(':_offline.._value', '');
       if (!_mockCorrections[key]) _mockCorrections[key] = [];
       _mockCorrections[key].push({
         time: timestamp instanceof Date ? timestamp.getTime() : timestamp,
@@ -131,7 +131,7 @@ const OABridge = (() => {
       });
     } else {
       dpValuePairs.forEach(([dp, val]) => {
-        const key = dp.replace(':_correction.._value', '').replace(':_offline.._value', '');
+        const key = dp.replace(':_corr.._value', '').replace(':_offline.._value', '');
         if (!_mockCorrections[key]) _mockCorrections[key] = [];
         _mockCorrections[key].push({
           time: timestamp instanceof Date ? timestamp.getTime() : timestamp,
@@ -150,7 +150,7 @@ const OABridge = (() => {
   // instead of the original.
   // ══════════════════════════════════════════════════════════════
   function writeCorrection(dpName, timestamp, correctedValue) {
-    const corrDp = dpName + ':_correction.._value';
+    const corrDp = dpName + ':_corr.._value';
     return dpSetTimed(timestamp, corrDp, correctedValue);
   }
 
@@ -167,7 +167,7 @@ const OABridge = (() => {
     return dpQuery(query);
   }
 
-  // ── queryCorrectionValues — Query _correction archive only ──
+  // ── queryCorrectionValues — Query _corr archive only ────────
   function queryCorrectionValues(dpName, tStart, tEnd) {
     const fmt = (d) => {
       const t = d instanceof Date ? d : new Date(d);
@@ -175,7 +175,7 @@ const OABridge = (() => {
       return t.getFullYear() + '.' + pad(t.getMonth() + 1) + '.' + pad(t.getDate()) + ' ' +
              pad(t.getHours()) + ':' + pad(t.getMinutes()) + ':' + pad(t.getSeconds());
     };
-    const query = "SELECT '_correction.._value', '_correction.._stime' FROM '" +
+    const query = "SELECT '_corr.._value', '_corr.._stime' FROM '" +
                   dpName + "' TIMERANGE(\"" + fmt(tStart) + "\",\"" + fmt(tEnd) + "\",1,0)";
     return dpQuery(query);
   }
@@ -185,7 +185,7 @@ const OABridge = (() => {
     if (_mode === 'mock') {
       return _mockCorrections[dpName] || [];
     }
-    return []; // In live mode, query _correction directly
+    return []; // In live mode, query _corr directly
   }
 
   // ── dpGet — Read a value from a datapoint ───────────────────

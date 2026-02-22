@@ -219,22 +219,22 @@ Le système intègre le mécanisme de correction d'archive WinCC OA :
 | Concept | Description |
 |---------|-------------|
 | `_original.._value` | Valeur brute archivée (écrite par le moteur d'archivage) |
-| `_correction.._value` | Valeur corrigée (écrite via `dpSetTimed`) |
-| `_offline.._value` | Abstraction : retourne `_correction` si présente, sinon `_original` |
+| `_corr.._value` | Valeur corrigée (écrite via `dpSetTimed`) |
+| `_offline.._value` | Abstraction : retourne `_corr` si présente, sinon `_original` |
 
 **Workflow de correction :**
 
 1. Ouvrir la modale de correction depuis le bouton loupe sur une source
 2. Charger l'historique pour visualiser les valeurs originales et corrigées
-3. Appliquer une correction : écrit via `dpSetTimed(timestamp, dp:_correction.._value, value)`
-4. Déclencher le recalcul KPI : les moteurs CTRL relisent via `_offline` (obtiennent les corrections) et écrivent les KPI recalculés dans `_correction.._value` des DPs cibles
+3. Appliquer une correction : écrit via `dpSetTimed(timestamp, dp:_corr.._value, value)`
+4. Déclencher le recalcul KPI : les moteurs CTRL relisent via `_offline` (obtiennent les corrections) et écrivent les KPI recalculés dans `_corr.._value` des DPs cibles
 
 **Recalcul automatique :**
 
 - Le webview écrit une requête JSON dans `KPI_Config.recalcRequest`
 - Les deux moteurs CTRL (`kpiAggregationEngine` et `kpiOeeEngine`) surveillent ce DP via `dpConnect`
 - À réception, ils recalculent les KPIs/OEE affectés en relisant via `_offline`
-- Les résultats corrigés sont écrits via `dpSetTimed` dans `_correction.._value` des DPs résultats
+- Les résultats corrigés sont écrits via `dpSetTimed` dans `_corr.._value` des DPs résultats
 - Les requêtes `_offline` sur les KPIs retournent alors les valeurs corrigées
 
 ---
@@ -258,11 +258,11 @@ OABridge.dpConnect("System1:Plant.Water.Counter", (value) => { ... });
 
 // Correction de valeur archivée (dpSetTimed)
 OABridge.writeCorrection("System1:Plant.Water.Counter", timestamp, 123.45);
-// Équivalent à: dpSetTimed(timestamp, "System1:Plant.Water.Counter:_correction.._value", 123.45)
+// Équivalent à: dpSetTimed(timestamp, "System1:Plant.Water.Counter:_corr.._value", 123.45)
 
 // Lecture archive originale vs corrigée
 OABridge.queryOriginalValues(dp, tStart, tEnd);     // SELECT '_original.._value' ...
-OABridge.queryCorrectionValues(dp, tStart, tEnd);    // SELECT '_correction.._value' ...
+OABridge.queryCorrectionValues(dp, tStart, tEnd);    // SELECT '_corr.._value' ...
 // Toutes les lectures standard utilisent _offline (retourne correction si présente)
 ```
 
