@@ -43,7 +43,12 @@ const OeeAnalysis = (() => {
     const tRange = _getSelectedTimeRange();
 
     // Query state history
-    const stateHistory = await _queryStateHistory(machine.stateDp, tRange.start, tRange.end);
+    const stateHistoryRaw = await _queryStateHistory(machine.stateDp, tRange.start, tRange.end);
+
+    // Apply microstop filtering if configured
+    const microstopThreshold = oeeConf ? (oeeConf.microstopThresholdSec || 0) : 0;
+    const microstopResult = _filterMicrostops(stateHistoryRaw, machine.states, tRange.start, tRange.end, microstopThreshold);
+    const stateHistory = microstopResult.filtered;
 
     // Compute time per state and frequency
     const stateStats = _computeStateStats(stateHistory, machine.states, tRange.start, tRange.end);
@@ -80,7 +85,7 @@ const OeeAnalysis = (() => {
 
     // Render everything
     _renderAnalysis(machine, stateStats, causeStats, oeeResult, tRange,
-      stateHistory, mtbfMttr, teep, prevOeeResult, prevMtbfMttr);
+      stateHistoryRaw, mtbfMttr, teep, prevOeeResult, prevMtbfMttr, microstopResult);
   }
 
   // ── Time range from UI ──────────────────────────────────────
@@ -266,6 +271,9 @@ const OeeAnalysis = (() => {
 
       const durationSec = (segEnd - segStart) / 1000;
 
+      // Skip microstop sentinel entries — they don't count as any state
+      if (val === '__MICROSTOP__') continue;
+
       if (!stats[val]) {
         stats[val] = {
           value: val,
@@ -335,6 +343,57 @@ const OeeAnalysis = (() => {
     }
 
     return stats;
+  }
+
+  // ── Microstop filtering ─────────────────────────────────────
+  // Identify stops shorter than the threshold and reclassify them.
+  // Returns { filtered: modified stateHistory, microstopCount, microstopTotalSec }
+  function _filterMicrostops(stateHistory, stateDefinitions, tStart, tEnd, thresholdSec) {
+    if (!thresholdSec || thresholdSec <= 0 || !stateHistory || stateHistory.length === 0) {
+      return { filtered: stateHistory, microstopCount: 0, microstopTotalSec: 0 };
+    }
+
+    const unplannedStates = new Set();
+    (stateDefinitions || []).forEach(sd => {
+      if (sd.category === 'UNPLANNED_STOP' || (!sd.isPlanned && sd.category !== 'PRODUCING' && sd.category !== 'IDLE')) {
+        unplannedStates.add(String(sd.value));
+      }
+    });
+
+    const startMs = tStart.getTime();
+    const endMs = tEnd.getTime();
+    let microstopCount = 0;
+    let microstopTotalSec = 0;
+
+    // Mark microstop entries
+    const isMicrostop = new Array(stateHistory.length).fill(false);
+    for (let i = 0; i < stateHistory.length; i++) {
+      const val = String(stateHistory[i].value);
+      if (!unplannedStates.has(val)) continue;
+
+      const segStartMs = Math.max(stateHistory[i].time.getTime(), startMs);
+      const segEndMs = i + 1 < stateHistory.length
+        ? Math.min(stateHistory[i + 1].time.getTime(), endMs)
+        : endMs;
+      if (segEndMs <= segStartMs) continue;
+
+      const durationSec = (segEndMs - segStartMs) / 1000;
+      if (durationSec < thresholdSec) {
+        isMicrostop[i] = true;
+        microstopCount++;
+        microstopTotalSec += durationSec;
+      }
+    }
+
+    // Build filtered history: microstops become PRODUCING (or the previous non-stop state)
+    const filtered = stateHistory.map((entry, i) => {
+      if (isMicrostop[i]) {
+        return { value: '__MICROSTOP__', time: entry.time, _original: entry.value };
+      }
+      return entry;
+    });
+
+    return { filtered, microstopCount, microstopTotalSec };
   }
 
   // ── Compute OEE from raw archive data ───────────────────────
@@ -516,17 +575,27 @@ const OeeAnalysis = (() => {
 
   // ── Render the full analysis view ───────────────────────────
   function _renderAnalysis(machine, stateStats, causeStats, oeeResult, tRange,
-    stateHistory, mtbfMttr, teep, prevOeeResult, prevMtbfMttr) {
+    stateHistory, mtbfMttr, teep, prevOeeResult, prevMtbfMttr, microstopResult) {
     const container = document.getElementById('analysisResults');
     if (!container) return;
 
     const totalSec = (tRange.end.getTime() - tRange.start.getTime()) / 1000;
-    let html = '';
+
+    // Store data for CSV export
+    _storeExportData(machine, stateStats, causeStats, oeeResult, tRange, mtbfMttr, teep, microstopResult);
+
+    // Export toolbar
+    let html = '<div class="analysis-export-bar">' +
+      '<span class="analysis-export-label">Export:</span>' +
+      (oeeResult ? '<button class="btn btn-sm btn-secondary" onclick="OeeAnalysis.exportOeeCsv()">OEE Summary</button>' : '') +
+      '<button class="btn btn-sm btn-secondary" onclick="OeeAnalysis.exportStatesCsv()">State Analysis</button>' +
+      (causeStats ? '<button class="btn btn-sm btn-secondary" onclick="OeeAnalysis.exportCausesCsv()">Cause Analysis</button>' : '') +
+    '</div>';
 
     // ── OEE Gauges + MTBF/MTTR/TEEP (if available) ───────────
     if (oeeResult) {
       const limits = _currentOeeId ? _getOeeLimits(_currentOeeId) : null;
-      html += _renderOeeGauges(oeeResult, teep, mtbfMttr, prevOeeResult, prevMtbfMttr, limits);
+      html += _renderOeeGauges(oeeResult, teep, mtbfMttr, prevOeeResult, prevMtbfMttr, limits, microstopResult);
     }
 
     // ── Gantt Chart (state timeline) ──────────────────────────
@@ -545,7 +614,7 @@ const OeeAnalysis = (() => {
 
     // ── Cause Pareto (if available) ───────────────────────────
     if (causeStats) {
-      html += _renderCausePareto(causeStats, totalSec);
+      html += _renderCausePareto(causeStats, totalSec, machine.causes);
     }
 
     container.innerHTML = html;
@@ -558,7 +627,7 @@ const OeeAnalysis = (() => {
     return oee.limits;
   }
 
-  function _renderOeeGauges(r, teep, mtbfMttr, prevR, prevMtbf, limits) {
+  function _renderOeeGauges(r, teep, mtbfMttr, prevR, prevMtbf, limits, microstopResult) {
     const fmtPct = (v) => (v * 100).toFixed(1) + '%';
     const fmtTime = (sec) => {
       if (sec == null) return '--';
@@ -599,6 +668,11 @@ const OeeAnalysis = (() => {
       html += _kpiCard('MTTR', fmtTime(mtbfMttr.mttr),
         'Mean Time To Repair',
         _limitClassTime(mtbfMttr.mttr, limits, 'mttr'));
+    }
+    // Microstop info
+    if (microstopResult && microstopResult.microstopCount > 0) {
+      html += _kpiCard('Microstops', microstopResult.microstopCount + 'x',
+        fmtTime(microstopResult.microstopTotalSec) + ' total (filtered from downtime)', '');
     }
     html += '</div>';
 
@@ -777,8 +851,8 @@ const OeeAnalysis = (() => {
     '</div>';
   }
 
-  // ── Cause Pareto chart (horizontal bars) ────────────────────
-  function _renderCausePareto(causeStats, totalSec) {
+  // ── Cause Pareto chart (horizontal bars, hierarchical) ──────
+  function _renderCausePareto(causeStats, totalSec, causeDefinitions) {
     const entries = Object.values(causeStats)
       .filter(c => c.totalSeconds > 0 || c.occurrences > 0)
       .sort((a, b) => b.totalSeconds - a.totalSeconds);
@@ -810,13 +884,34 @@ const OeeAnalysis = (() => {
       OTHER: '#adb5bd',
     };
 
-    let bars = '';
+    // Build parentCode lookup from cause definitions
+    const parentMap = {};
+    (causeDefinitions || []).forEach(cd => {
+      if (cd.parentCode) parentMap[cd.code] = cd.parentCode;
+    });
+
+    // Build tree structure: group children under parents
+    const rootEntries = [];
+    const childrenOf = {};
     entries.forEach(c => {
+      const parent = parentMap[c.code];
+      if (parent && entries.some(e => e.code === parent)) {
+        if (!childrenOf[parent]) childrenOf[parent] = [];
+        childrenOf[parent].push(c);
+      } else {
+        rootEntries.push(c);
+      }
+    });
+
+    // Render a Pareto row
+    function renderParetoRow(c, indent) {
       const barPct = (c.totalSeconds / maxDuration * 100);
       const color = catColors[c.category] || '#6b7c8e';
+      const indentPx = indent * 20;
 
-      bars += '<div class="pareto-row">' +
+      return '<div class="pareto-row" style="padding-left:' + indentPx + 'px;">' +
         '<div class="pareto-label">' +
+          (indent > 0 ? '<span class="pareto-indent">&#x251C; </span>' : '') +
           '<span class="pareto-cause">' + Utils.escapeHtml(c.label) + '</span>' +
           '<span class="pareto-cat">' + Utils.escapeHtml(Utils.CAUSE_CATEGORIES[c.category] || c.category) + '</span>' +
         '</div>' +
@@ -828,11 +923,21 @@ const OeeAnalysis = (() => {
           '<span class="pareto-count">' + c.occurrences + 'x</span>' +
         '</div>' +
       '</div>';
+    }
+
+    let bars = '';
+    rootEntries.forEach(c => {
+      bars += renderParetoRow(c, 0);
+      // Render children sorted by duration
+      const children = (childrenOf[c.code] || []).sort((a, b) => b.totalSeconds - a.totalSeconds);
+      children.forEach(child => {
+        bars += renderParetoRow(child, 1);
+      });
     });
 
     return '<div class="analysis-section">' +
       '<h3 class="analysis-title">Downtime Causes — Pareto</h3>' +
-      '<p class="analysis-hint">Sorted by total duration. Based on raw archive data for selected period.</p>' +
+      '<p class="analysis-hint">Sorted by total duration. Hierarchical cause grouping based on parent relationships.</p>' +
       '<div class="pareto-chart">' + bars + '</div>' +
     '</div>';
   }
@@ -1002,6 +1107,91 @@ const OeeAnalysis = (() => {
     '</div>';
   }
 
+  // ── CSV Export ────────────────────────────────────────────────
+  // Stores latest analysis data for export
+  let _lastExportData = null;
+
+  function _storeExportData(machine, stateStats, causeStats, oeeResult, tRange, mtbfMttr, teep, microstopResult) {
+    _lastExportData = { machine, stateStats, causeStats, oeeResult, tRange, mtbfMttr, teep, microstopResult };
+  }
+
+  function _downloadCsv(filename, csvContent) {
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportStatesCsv() {
+    if (!_lastExportData) { Utils.toast('No analysis data to export', 'error'); return; }
+    const d = _lastExportData;
+    const totalSec = (d.tRange.end.getTime() - d.tRange.start.getTime()) / 1000;
+    const entries = Object.values(d.stateStats).sort((a, b) => b.totalSeconds - a.totalSeconds);
+
+    let csv = 'State,Category,Duration (s),Percentage (%),Transitions\n';
+    entries.forEach(s => {
+      const pct = totalSec > 0 ? (s.totalSeconds / totalSec * 100).toFixed(2) : '0';
+      csv += '"' + s.label + '","' + s.category + '",' + s.totalSeconds.toFixed(1) + ',' + pct + ',' + s.transitionCount + '\n';
+    });
+    _downloadCsv('state_analysis_' + _formatFilenameDate(d.tRange) + '.csv', csv);
+    Utils.toast('State analysis exported', 'success');
+  }
+
+  function exportCausesCsv() {
+    if (!_lastExportData || !_lastExportData.causeStats) { Utils.toast('No cause data to export', 'error'); return; }
+    const d = _lastExportData;
+    const entries = Object.values(d.causeStats)
+      .filter(c => c.totalSeconds > 0 || c.occurrences > 0)
+      .sort((a, b) => b.totalSeconds - a.totalSeconds);
+
+    let csv = 'Cause,Category,Duration (s),Occurrences\n';
+    entries.forEach(c => {
+      csv += '"' + c.label + '","' + c.category + '",' + c.totalSeconds.toFixed(1) + ',' + c.occurrences + '\n';
+    });
+    _downloadCsv('cause_analysis_' + _formatFilenameDate(d.tRange) + '.csv', csv);
+    Utils.toast('Cause analysis exported', 'success');
+  }
+
+  function exportOeeCsv() {
+    if (!_lastExportData || !_lastExportData.oeeResult) { Utils.toast('No OEE data to export', 'error'); return; }
+    const d = _lastExportData;
+    const r = d.oeeResult;
+    const fmtPct = (v) => (v * 100).toFixed(2);
+
+    let csv = 'KPI,Value\n';
+    csv += 'Machine,"' + d.machine.name + '"\n';
+    csv += 'Period Start,"' + d.tRange.start.toISOString() + '"\n';
+    csv += 'Period End,"' + d.tRange.end.toISOString() + '"\n';
+    csv += 'Availability (%),' + fmtPct(r.availability) + '\n';
+    csv += 'Performance (%),' + fmtPct(r.performance) + '\n';
+    csv += 'Quality (%),' + fmtPct(r.quality) + '\n';
+    csv += 'OEE (%),' + fmtPct(r.oee) + '\n';
+    if (d.teep != null) csv += 'TEEP (%),' + fmtPct(d.teep) + '\n';
+    if (d.mtbfMttr) {
+      csv += 'MTBF (s),' + (d.mtbfMttr.mtbf != null ? d.mtbfMttr.mtbf.toFixed(1) : '') + '\n';
+      csv += 'MTTR (s),' + (d.mtbfMttr.mttr != null ? d.mtbfMttr.mttr.toFixed(1) : '') + '\n';
+      csv += 'Failure Count,' + d.mtbfMttr.failureCount + '\n';
+    }
+    if (d.microstopResult && d.microstopResult.microstopCount > 0) {
+      csv += 'Microstop Count,' + d.microstopResult.microstopCount + '\n';
+      csv += 'Microstop Total (s),' + d.microstopResult.microstopTotalSec.toFixed(1) + '\n';
+    }
+    csv += 'Producing Time (s),' + r.producingTime.toFixed(1) + '\n';
+    csv += 'Unplanned Downtime (s),' + r.unplannedDowntime.toFixed(1) + '\n';
+    csv += 'Planned Downtime (s),' + r.plannedDowntime.toFixed(1) + '\n';
+
+    _downloadCsv('oee_summary_' + _formatFilenameDate(d.tRange) + '.csv', csv);
+    Utils.toast('OEE summary exported', 'success');
+  }
+
+  function _formatFilenameDate(tRange) {
+    const fmt = (d) => d.toISOString().slice(0, 10);
+    return fmt(tRange.start) + '_to_' + fmt(tRange.end);
+  }
+
   function _renderEmpty(msg) {
     const container = document.getElementById('analysisResults');
     if (container) {
@@ -1162,5 +1352,5 @@ const OeeAnalysis = (() => {
     refreshMachineSelect();
   }
 
-  return { init, refresh, refreshMachineSelect };
+  return { init, refresh, refreshMachineSelect, exportStatesCsv, exportCausesCsv, exportOeeCsv };
 })();

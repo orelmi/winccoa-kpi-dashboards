@@ -165,6 +165,7 @@ const OeeConfig = (() => {
     document.getElementById('grpDesignSpeed').style.display = 'none';
     document.getElementById('grpRejectPieces').style.display = 'none';
     document.getElementById('grpFixedRatio').style.display = 'none';
+    document.getElementById('oeeMicrostopThreshold').value = 0;
     _refreshSelects(null);
     Utils.openModal('modalOee');
   }
@@ -187,6 +188,7 @@ const OeeConfig = (() => {
     document.getElementById('oeePeriod').value = oee.period || 'SHIFT';
     document.getElementById('oeeTargetDp').value = oee.targetDp || '';
     document.getElementById('oeeEnabled').checked = oee.enabled !== false;
+    document.getElementById('oeeMicrostopThreshold').value = oee.microstopThresholdSec || 0;
 
     // Populate limit fields
     const lim = oee.limits || {};
@@ -253,6 +255,7 @@ const OeeConfig = (() => {
       period: document.getElementById('oeePeriod').value,
       targetDp: document.getElementById('oeeTargetDp').value.trim() || null,
       enabled: document.getElementById('oeeEnabled').checked,
+      microstopThresholdSec: parseInt(document.getElementById('oeeMicrostopThreshold').value) || 0,
       limits: {
         oeeWarn: parseLimit('oeeLimitOeeWarn'),
         oeeAlarm: parseLimit('oeeLimitOeeAlarm'),

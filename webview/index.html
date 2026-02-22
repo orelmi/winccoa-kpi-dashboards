@@ -479,6 +479,7 @@
                   <th>Code</th>
                   <th>Label</th>
                   <th>Category</th>
+                  <th>Parent</th>
                   <th></th>
                 </tr>
               </thead>
@@ -621,6 +622,19 @@
               <label class="checkbox-label">
                 <input type="checkbox" id="oeeEnabled" checked> Enabled
               </label>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="form-fieldset">
+          <legend>Microstop Filtering</legend>
+          <p class="form-hint">Stops shorter than the threshold are classified as microstops.
+            Microstops are counted separately and excluded from unplanned downtime in OEE availability calculation.</p>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeeMicrostopThreshold">Microstop Threshold (seconds)</label>
+              <input type="number" id="oeeMicrostopThreshold" value="0" min="0" step="1" placeholder="e.g. 120">
+              <span class="form-hint">Set to 0 to disable. Typical: 30–300s.</span>
             </div>
           </div>
         </fieldset>

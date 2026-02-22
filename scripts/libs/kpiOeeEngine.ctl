@@ -286,23 +286,54 @@ float calcAvailability(mapping machine, mapping oee,
 
   if (totalPlanned <= 0) return 1.0;
 
-  // Get state history
-  mapping stateTime = calcTimePerState(machine, tStart, tEnd);
+  // Microstop threshold (seconds) — stops shorter are excluded
+  float microstopThreshold = 0;
+  if (mappingHasKey(oee, "microstopThresholdSec"))
+    microstopThreshold = (float)oee["microstopThresholdSec"];
 
-  // Sum unplanned downtime
-  float unplannedDown = 0;
+  // Get state history with per-segment durations
+  string stateDp = machine["stateDp"];
+  dyn_dyn_anytype queryResult;
+  string query = "SELECT '_offline.._value', '_offline.._stime' FROM '" +
+                 stateDp + "' TIMERANGE(\"" +
+                 formatTime("%Y.%m.%d %H:%M:%S", tStart) + "\",\"" +
+                 formatTime("%Y.%m.%d %H:%M:%S", tEnd) + "\",1,0)";
+  dpQuery(query, queryResult);
+
+  // Build set of unplanned stop state values
+  mapping unplannedSet;
   dyn_mapping states = machine["states"];
   for (int i = 1; i <= dynlen(states); i++)
   {
     string cat = states[i]["category"];
     bool planned = states[i]["isPlanned"];
-    string val = states[i]["value"];
-
     if (cat == "UNPLANNED_STOP" || (cat != "PRODUCING" && !planned))
-    {
-      if (mappingHasKey(stateTime, val))
-        unplannedDown += stateTime[val];
-    }
+      unplannedSet[states[i]["value"]] = true;
+  }
+
+  // Sum unplanned downtime, filtering out microstops
+  float unplannedDown = 0;
+  int count = dynlen(queryResult);
+  for (int i = 2; i <= count; i++)
+  {
+    string stateVal = (string)queryResult[i][1];
+    if (!mappingHasKey(unplannedSet, stateVal)) continue;
+
+    time t1 = (time)queryResult[i][2];
+    time t2;
+    if (i < count)
+      t2 = (time)queryResult[i+1][2];
+    else
+      t2 = tEnd;
+
+    float dt = (float)(period(t2) - period(t1));
+    if (dt < 0) dt = 0;
+
+    // Skip microstops (shorter than threshold)
+    if (microstopThreshold > 0 && dt < microstopThreshold)
+      continue;
+
+    unplannedDown += dt;
   }
 
   float avail = (totalPlanned - unplannedDown) / totalPlanned;

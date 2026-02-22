@@ -138,16 +138,27 @@ const MachineStateConfig = (() => {
   // ── Cause definition rows in modal ──────────────────────────
   function _renderCauseRows(causes) {
     const tbody = document.getElementById('causeDefBody');
-    tbody.innerHTML = (causes || []).map((c) => {
+    const allCauses = causes || [];
+
+    tbody.innerHTML = allCauses.map((c) => {
       const catOptions = Object.entries(Utils.CAUSE_CATEGORIES).map(([key, label]) => {
         const sel = c.category === key ? ' selected' : '';
         return '<option value="' + key + '"' + sel + '>' + label + '</option>';
       }).join('');
 
+      // Parent code selector — allows building a tree of causes
+      const parentOptions = '<option value="">(root)</option>' +
+        allCauses.filter(pc => pc.code !== c.code).map(pc => {
+          const sel = c.parentCode === pc.code ? ' selected' : '';
+          return '<option value="' + Utils.escapeHtml(pc.code) + '"' + sel + '>' +
+            Utils.escapeHtml(pc.code + ' — ' + pc.label) + '</option>';
+        }).join('');
+
       return '<tr>' +
         '<td><input type="text" class="cause-code" value="' + Utils.escapeHtml(c.code) + '" style="width:60px;padding:4px 6px;font-size:12px;"></td>' +
-        '<td><input type="text" class="cause-label" value="' + Utils.escapeHtml(c.label) + '" style="width:180px;padding:4px 6px;font-size:12px;"></td>' +
+        '<td><input type="text" class="cause-label" value="' + Utils.escapeHtml(c.label) + '" style="width:140px;padding:4px 6px;font-size:12px;"></td>' +
         '<td><select class="cause-cat" style="padding:4px 6px;font-size:12px;">' + catOptions + '</select></td>' +
+        '<td><select class="cause-parent" style="padding:4px 6px;font-size:12px;">' + parentOptions + '</select></td>' +
         '<td><button type="button" class="btn-icon danger" onclick="MachineStateConfig.removeCauseRow(this)">&#128465;</button></td>' +
       '</tr>';
     }).join('');
@@ -159,11 +170,21 @@ const MachineStateConfig = (() => {
       return '<option value="' + key + '">' + label + '</option>';
     }).join('');
 
+    // Build parent options from existing rows
+    const existingCodes = Array.from(tbody.querySelectorAll('.cause-code')).map(input => ({
+      code: input.value.trim(),
+      label: input.closest('tr').querySelector('.cause-label').value.trim(),
+    })).filter(c => c.code);
+    const parentOptions = '<option value="">(root)</option>' +
+      existingCodes.map(pc => '<option value="' + Utils.escapeHtml(pc.code) + '">' +
+        Utils.escapeHtml(pc.code + ' — ' + pc.label) + '</option>').join('');
+
     const tr = document.createElement('tr');
     tr.innerHTML =
       '<td><input type="text" class="cause-code" value="" placeholder="Code" style="width:60px;padding:4px 6px;font-size:12px;"></td>' +
-      '<td><input type="text" class="cause-label" value="" placeholder="Cause label" style="width:180px;padding:4px 6px;font-size:12px;"></td>' +
+      '<td><input type="text" class="cause-label" value="" placeholder="Cause label" style="width:140px;padding:4px 6px;font-size:12px;"></td>' +
       '<td><select class="cause-cat" style="padding:4px 6px;font-size:12px;">' + catOptions + '</select></td>' +
+      '<td><select class="cause-parent" style="padding:4px 6px;font-size:12px;">' + parentOptions + '</select></td>' +
       '<td><button type="button" class="btn-icon danger" onclick="MachineStateConfig.removeCauseRow(this)">&#128465;</button></td>';
     tbody.appendChild(tr);
   }
@@ -190,6 +211,7 @@ const MachineStateConfig = (() => {
       code: row.querySelector('.cause-code').value.trim(),
       label: row.querySelector('.cause-label').value.trim(),
       category: row.querySelector('.cause-cat').value,
+      parentCode: row.querySelector('.cause-parent') ? row.querySelector('.cause-parent').value || null : null,
     })).filter(c => c.label);
   }
 
