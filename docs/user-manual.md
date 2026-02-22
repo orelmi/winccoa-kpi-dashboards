@@ -4,7 +4,7 @@
 
 ### Simulation Mode (Browser)
 
-1. Start a local server: `python3 -m http.server 8080 --directory webview`
+1. Start a local server: `python3 -m http.server 8080 --directory data/html/pi-webview`
 2. Open `http://localhost:8080/sources.html`
 3. Data is stored in browser `localStorage`
 

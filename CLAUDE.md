@@ -13,7 +13,7 @@ WinCC OA KPI Dashboard — A multi-page web application for configuring and anal
 
 ## Architecture
 
-- **webview/** — HTML pages loaded via `loadSnippet()` in WebView EWO
+- **data/html/pi-webview/** — HTML pages loaded via `loadSnippet()` in WebView EWO
   - Each page is self-contained and can be loaded independently
   - Navigation between pages is handled by the CTRL panel script (`loadSnippet`)
   - In simulation mode (no WinCC OA), pages use `window.location` for navigation

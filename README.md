@@ -40,7 +40,7 @@ Inspired by Siemens Performance Insight (Industrial Edge).
 ### Simulation Mode (no WinCC OA needed)
 
 ```bash
-python3 -m http.server 8080 --directory webview
+python3 -m http.server 8080 --directory data/html/pi-webview
 # Open http://localhost:8080/sources.html
 ```
 
@@ -62,7 +62,7 @@ To reset: click **Clear All Data** on the same page, or call `DemoSeed.clear()` 
 2. **Copy files** into your WinCC OA project:
    - `panels/kpiWebView.xml` → `<project>/panels/`
    - `scripts/libs/*.ctl` → `<project>/scripts/libs/`
-   - `webview/` → `<project>/data/webview/`
+   - `data/html/pi-webview/` → `<project>/data/html/pi-webview/`
 3. **Start CTRL managers** for `kpiAggregationEngine.ctl` and `kpiOeeEngine.ctl`
 4. **Open** `panels/kpiWebView.xml` — the panel loads `sources.html` by default
 
@@ -89,6 +89,6 @@ Navigation between pages is handled by the CTRL panel script (`loadSnippet`).
 
 For detailed documentation, see the `docs/` folder:
 
-- [Architecture](docs/architecture.md) — Data access layer, module structure, CTRL integration
+- [Architecture](docs/architecture.md) — Data access layer, module structure, CTRL integration, KPI calculation pipeline
 - [Functional Specification](docs/functional-spec.md) — Detailed feature descriptions
 - [User Manual](docs/user-manual.md) — Step-by-step usage instructions

@@ -21,7 +21,7 @@
  *
  *   Initialize:
  *     kpiDataAccessInit(this);
- *     this.loadSnippet("/webview/index.html");
+ *     this.loadSnippet("/data/html/pi-webview/index.html");
  *
  *   messageReceived:
  *     kpiHandleMessage(this, params);
@@ -360,7 +360,7 @@ void _kpiExportGanttMapping(shape ws, mapping params, mapping p)
 // navigate — Load a different HTML page via loadSnippet
 //
 // { cmd:"navigate", page:"oee-config" }
-// Loads /webview/<page>.html into the WebView EWO.
+// Loads /data/html/pi-webview/<page>.html into the WebView EWO.
 // This replaces the current page entirely.
 // ═══════════════════════════════════════════════════════════════
 
@@ -377,7 +377,7 @@ void _kpiNavigate(shape ws, mapping params, mapping p)
     return;
   }
 
-  string url = "/webview/" + page + ".html";
+  string url = "/data/html/pi-webview/" + page + ".html";
   DebugN("[kpiDataAccess] Navigating to " + url);
   ws.loadSnippet(url);
 }
