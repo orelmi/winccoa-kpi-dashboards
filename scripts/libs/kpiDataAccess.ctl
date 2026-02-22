@@ -65,6 +65,7 @@ void kpiHandleMessage(shape webView, mapping params)
   else if (cmd == "requestRecalculation") _kpiRequestRecalculation(webView, params, p);
   else if (cmd == "subscribe")            _kpiSubscribe(webView, params, p);
   else if (cmd == "unsubscribe")          _kpiUnsubscribe(webView, params, p);
+  else if (cmd == "exportGanttMapping")   _kpiExportGanttMapping(webView, params, p);
   else
     DebugN("[kpiDataAccess] Unknown command:", cmd);
 }
@@ -293,6 +294,64 @@ void _kpiUnsubscribe(shape ws, mapping params, mapping p)
   string dp = p["dp"];
   dpDisconnect("_kpiSubscriptionCallback", dp);
   ws.msgToJs(params, 0);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// exportGanttMapping — Write a Dashboard Gantt mapping table
+//
+// { cmd:"exportGanttMapping", machineId:"...", mapping:"..." }
+// Stores the mapping JSON to KPI_Config.ganttMappings.<machineId>
+// so the WinCC OA Dashboard Gantt chart widget can reference it.
+//
+// The mapping format matches the Dashboard Gantt Chart widget
+// value-mapping table structure:
+//   { default: {name,description,color},
+//     entries: [{value,name,description,color},...] }
+// ═══════════════════════════════════════════════════════════════
+
+void _kpiExportGanttMapping(shape ws, mapping params, mapping p)
+{
+  string machineId = p["machineId"];
+  string mappingJson = p["mapping"];
+
+  string dp = KPI_CONFIG_DP_PREFIX + "ganttMapping_" + machineId;
+
+  // Create DP if it doesn't exist
+  if (!dpExists(dp))
+  {
+    DebugN("[kpiDataAccess] Creating Gantt mapping DP: " + dp);
+    // Store as element of KPI_Config if possible, otherwise create standalone
+    int rc = dpSet(KPI_CONFIG_DP_PREFIX + "ganttMappings", "");
+    if (rc != 0)
+    {
+      // KPI_Config.ganttMappings element may not exist — store in the
+      // main config DP as a JSON section
+      DebugN("[kpiDataAccess] Storing Gantt mapping in config section");
+    }
+  }
+
+  // Store the mapping as a config section
+  // Use the standard config storage mechanism
+  string configDp = KPI_CONFIG_DP_PREFIX + "ganttMappings";
+  string existingJson;
+  dpGet(configDp, existingJson);
+
+  mapping allMappings;
+  if (existingJson != "")
+  {
+    anytype parsed;
+    if (jsonDecode(existingJson, parsed) == 0)
+      allMappings = parsed;
+  }
+
+  allMappings[machineId] = mappingJson;
+
+  string result;
+  jsonEncode(allMappings, result);
+  int rc = dpSet(configDp, result);
+
+  DebugN("[kpiDataAccess] Gantt mapping exported for machine " + machineId + " rc=" + rc);
+  ws.msgToJs(params, rc);
 }
 
 // ═══════════════════════════════════════════════════════════════

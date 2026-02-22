@@ -364,6 +364,78 @@ const KPI = (() => {
     }
   }
 
+  // ═══════════════════════════════════════════════════════════
+  // Dashboard Gantt chart compatibility
+  //
+  // Generates a mapping table compatible with the WinCC OA
+  // Dashboard Gantt Chart widget. The mapping translates
+  // machine state integer codes to labels and colors.
+  // ═══════════════════════════════════════════════════════════
+
+  /**
+   * Build a Gantt mapping table from machine state config.
+   * Returns: { default: {name,description,color}, entries: [{value,name,description,color}] }
+   */
+  function buildGanttMapping(machineConfig) {
+    if (!machineConfig || !machineConfig.states) return null;
+
+    const entries = machineConfig.states.map(st => ({
+      value: st.value,
+      name: st.label,
+      description: st.category + (st.isPlanned ? ' (planned)' : ''),
+      color: st.color,
+    }));
+
+    return {
+      default: { name: 'Unknown', description: 'Unmapped state value', color: '#999999' },
+      entries: entries,
+    };
+  }
+
+  /**
+   * Export Gantt mapping to a WinCC OA DP (for Dashboard use).
+   * The CTRL side writes the JSON mapping to KPI_Config.ganttMappings.<machineId>
+   */
+  function exportGanttMapping(machineId, mapping) {
+    if (_mode === 'live') {
+      return _toCtrl({
+        cmd: 'exportGanttMapping',
+        machineId: machineId,
+        mapping: JSON.stringify(mapping),
+      });
+    }
+    localStorage.setItem('kpi_gantt_mapping_' + machineId, JSON.stringify(mapping));
+    return Promise.resolve();
+  }
+
+  /**
+   * Build full Dashboard Gantt widget config for a machine.
+   * Returns a JSON config object that can be imported into
+   * the WinCC OA Dashboard editor.
+   */
+  function buildDashboardGanttConfig(machineConfig, options) {
+    const opt = options || {};
+    const mapping = buildGanttMapping(machineConfig);
+    if (!mapping) return null;
+
+    return {
+      widget: 'ganttChart',
+      title: opt.title || machineConfig.name + ' — State Timeline',
+      series: [
+        {
+          dp: machineConfig.stateDp,
+          name: machineConfig.name,
+        },
+      ],
+      mapping: mapping,
+      timeRange: opt.timeRange || '8h',
+      rangeChangeable: true,
+      showLegend: true,
+      showTooltip: true,
+      showGrid: true,
+    };
+  }
+
   // ── Public API ──────────────────────────────────────────────
   return {
     init,
@@ -395,5 +467,10 @@ const KPI = (() => {
     // Live monitoring
     subscribe,
     unsubscribe,
+
+    // Dashboard Gantt chart compatibility
+    buildGanttMapping,
+    exportGanttMapping,
+    buildDashboardGanttConfig,
   };
 })();

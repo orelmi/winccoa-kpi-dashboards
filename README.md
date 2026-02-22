@@ -212,6 +212,37 @@ The OEE tab includes a **Live Analysis** sub-tab with display-time aggregation:
 
 **Previous Period Reference:** Each OEE gauge shows the delta (in percentage points) compared to the equivalent previous period.
 
+### WinCC OA Dashboard Gantt Chart Compatibility
+
+The machine state DPs are natively compatible with the [WinCC OA Dashboard Gantt Chart widget](https://www.winccoa.com/documentation/WinCCOA/3.21/en_US/Dashboard/topics/Dashboard_ganttchart.html).
+
+**Export mapping table:** Click the chart icon on a machine card to export a Gantt mapping JSON file. This file contains:
+- A value-to-label-to-color mapping table matching the Dashboard Gantt format
+- Series configuration pointing to the machine's state DP
+- Default time range (8h) with range selector enabled
+
+**Manual Dashboard setup:**
+1. Add a Gantt Chart widget in the WinCC OA Dashboard editor
+2. Add a series pointing to the machine's state DP (e.g., `System1:Line1.MachineState`)
+3. In the mapping table, configure each value from the machine state definition:
+
+| Value | Name | Color |
+|-------|------|-------|
+| 0 | Stopped | #d9363e |
+| 1 | Producing | #28a745 |
+| 2 | Idle | #ffc107 |
+| ... | ... | ... |
+
+4. Set time range (e.g., `8h`, `1d`, `1w/w`) and enable "range selector changeable"
+
+**Supported time range shortcuts:**
+- `1d/d` — Yesterday (full day)
+- `8h` — Last 8 hours (shift)
+- `1w/w` — Last week (Mon–Sun)
+- `1M/M` — Last month
+
+The exported mapping is also stored in `KPI_Config.ganttMappings` so it can be loaded programmatically by custom Dashboard widgets or scripts.
+
 ---
 
 ## Datapoint Types
@@ -227,6 +258,7 @@ Stores all configuration as JSON:
 | machines | string | JSON array of machine configs |
 | oee | string | JSON array of OEE configs |
 | recalcRequest | string | JSON recalculation request (triggers KPI/OEE recalculation) |
+| ganttMappings | string | JSON object of exported Dashboard Gantt mapping tables per machine |
 
 ### KPI_Result
 

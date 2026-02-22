@@ -79,6 +79,7 @@ const MachineStateConfig = (() => {
         '<div class="machine-card-header">' +
           '<h3>' + Utils.escapeHtml(m.name) + '</h3>' +
           '<div>' +
+            '<button class="btn-icon" onclick="MachineStateConfig.exportGantt(\'' + m.id + '\')" title="Export Gantt mapping for Dashboard">&#128202;</button>' +
             '<button class="btn-icon" onclick="MachineStateConfig.edit(\'' + m.id + '\')" title="Edit">&#9998;</button>' +
             '<button class="btn-icon danger" onclick="MachineStateConfig.remove(\'' + m.id + '\')" title="Delete">&#128465;</button>' +
           '</div>' +
@@ -273,6 +274,36 @@ const MachineStateConfig = (() => {
     document.getElementById('causeDefSection').style.display = checked ? 'block' : 'none';
   }
 
+  // ── Export Gantt mapping for Dashboard ──────────────────────
+  async function exportGantt(id) {
+    const m = getById(id);
+    if (!m) return;
+
+    const mapping = KPI.buildGanttMapping(m);
+    if (!mapping) {
+      Utils.toast('No state definitions to export', 'error');
+      return;
+    }
+
+    // Export to WinCC OA DP (or localStorage in mock)
+    await KPI.exportGanttMapping(id, mapping);
+
+    // Also build the full Dashboard widget config for reference
+    const dashConfig = KPI.buildDashboardGanttConfig(m);
+
+    // Show the config in a downloadable format
+    const configJson = JSON.stringify(dashConfig, null, 2);
+    const blob = new Blob([configJson], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'gantt_' + m.name.replace(/[^a-zA-Z0-9]/g, '_') + '.json';
+    a.click();
+    URL.revokeObjectURL(url);
+
+    Utils.toast('Gantt mapping exported for "' + m.name + '"', 'success');
+  }
+
   // ── Init ────────────────────────────────────────────────────
   function init() {
     document.getElementById('btnAddMachine').addEventListener('click', openAdd);
@@ -284,5 +315,5 @@ const MachineStateConfig = (() => {
     load();
   }
 
-  return { init, load, getAll, getById, onChange, edit, remove, addStateRow, removeStateRow, addCauseRow, removeCauseRow };
+  return { init, load, getAll, getById, onChange, edit, remove, exportGantt, addStateRow, removeStateRow, addCauseRow, removeCauseRow };
 })();
