@@ -123,17 +123,26 @@ const OABridge = (() => {
   // dpSetTimed — Write a value at a specific timestamp
   // Used for archive corrections: writes to _corr.._value
   //
-  // oaJsApi.dpSetTimed(sourceTime, dpeName, value, {success, error})
-  // sourceTime: Date object — the archive timestamp
+  // dpSetTimed is NOT available in oaJsApi. In live mode we
+  // delegate to the panel CTRL script via oaJsApi.toCtrl().
+  // The panel's messageReceived handler calls the real
+  // CTRL dpSetTimed(time, dp, value).
   // ══════════════════════════════════════════════════════════════
   function dpSetTimed(timestamp, dp, value) {
     if (_mode === 'live') {
       return new Promise((resolve, reject) => {
-        const ts = timestamp instanceof Date ? timestamp : new Date(timestamp);
-        oaJsApi.dpSetTimed(ts, dp, value, {
+        const ts = timestamp instanceof Date
+          ? timestamp.toISOString()
+          : String(timestamp);
+        oaJsApi.toCtrl({
+          cmd: 'dpSetTimed',
+          timestamp: ts,
+          dp: dp,
+          value: value
+        }, {
           success: function() { resolve(); },
           error: function() {
-            reject(new Error('dpSetTimed failed: ' + dp));
+            reject(new Error('dpSetTimed failed (toCtrl): ' + dp));
           }
         });
       });
@@ -153,21 +162,10 @@ const OABridge = (() => {
   }
 
   // ── dpSetTimedMultiple — Multiple timed writes ──────────────
-  // oaJsApi.dpSetTimed supports arrays natively:
-  // oaJsApi.dpSetTimed(sourceTime, [dp1, dp2], [val1, val2], opts)
+  // Delegates each write to dpSetTimed (via toCtrl).
   function dpSetTimedMultiple(timestamp, dpValuePairs) {
     if (_mode === 'live') {
-      const ts = timestamp instanceof Date ? timestamp : new Date(timestamp);
-      const dps = dpValuePairs.map(p => p[0]);
-      const vals = dpValuePairs.map(p => p[1]);
-      return new Promise((resolve, reject) => {
-        oaJsApi.dpSetTimed(ts, dps, vals, {
-          success: function() { resolve(); },
-          error: function() {
-            reject(new Error('dpSetTimedMultiple failed'));
-          }
-        });
-      });
+      return Promise.all(dpValuePairs.map(p => dpSetTimed(timestamp, p[0], p[1])));
     }
     dpValuePairs.forEach(p => {
       const key = p[0].replace(':_corr.._value', '').replace(':_offline.._value', '');

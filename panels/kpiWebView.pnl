@@ -32,11 +32,25 @@ OBJECT WebView
 {
   // Handle commands from JavaScript (oaJsApi.toCtrl)
   // for functions not directly available in oaJsApi.
-  // Note: dpSetTimed IS available natively in oaJsApi,
-  // so only dpCreate needs the toCtrl delegation.
   string cmd = params[\"cmd\"];
 
-  if (cmd == \"dpCreate\")
+  if (cmd == \"dpSetTimed\")
+  {
+    // JavaScript sends: {cmd, timestamp (ISO string), dp, value}
+    string tsStr = params[\"timestamp\"];
+    string dp    = params[\"dp\"];
+    float  val   = params[\"value\"];
+
+    time ts = makeTime(tsStr);
+    int rc = dpSetTimed(ts, dp, val);
+
+    mapping response;
+    response[\"cmd\"]    = \"dpSetTimedResult\";
+    response[\"dp\"]     = dp;
+    response[\"status\"] = (rc == 0) ? \"ok\" : \"error\";
+    this.msgToJs(response);
+  }
+  else if (cmd == \"dpCreate\")
   {
     string dpName = params[\"dpName\"];
     string dpType = params[\"dpType\"];
