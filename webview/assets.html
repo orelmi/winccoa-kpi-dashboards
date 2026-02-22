@@ -125,6 +125,7 @@
   <script src="js/machineStateConfig.js"></script>
   <script src="js/calendarConfig.js"></script>
   <script src="js/oeeConfig.js"></script>
+  <script src="js/eventLog.js"></script>
   <script src="js/assetConfig.js"></script>
   <script>
     (function() {
@@ -138,6 +139,7 @@
       MachineStateConfig.init();
       CalendarConfig.init();
       OeeConfig.init();
+      EventLog.init();    // Data-only (logs config changes)
       // Full init for asset module
       AssetConfig.init();
 

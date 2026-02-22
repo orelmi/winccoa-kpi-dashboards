@@ -52,6 +52,17 @@
         </div>
         <fieldset class="form-fieldset">
           <legend>State Definitions</legend>
+          <div class="form-row" style="margin-bottom:8px;">
+            <div class="form-group">
+              <label for="machStateTemplate">Load Template</label>
+              <select id="machStateTemplate" style="min-width:200px;">
+                <option value="">-- Load Template --</option>
+              </select>
+            </div>
+            <div class="form-group form-group-btn">
+              <button type="button" class="btn btn-sm btn-secondary" id="btnSaveAsTemplate">Save as Template</button>
+            </div>
+          </div>
           <p class="form-hint">Define each possible machine state and categorize it for OEE calculation.</p>
           <table class="config-table compact" id="stateDefTable">
             <thead>
@@ -132,6 +143,8 @@
   <script src="js/kpi.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/nav.js"></script>
+  <script src="js/assetConfig.js"></script>
+  <script src="js/eventLog.js"></script>
   <script src="js/machineStateConfig.js"></script>
   <script>
     (function() {
@@ -139,6 +152,9 @@
       Nav.render('machines');
       Nav.updateConnectionStatus(mode);
       Utils.initModalCloseButtons();
+      AssetConfig.init(); // Data-only (provides context filtering)
+      EventLog.init();    // Data-only (logs config changes)
+      Nav.renderContextFilter([function() { MachineStateConfig.render(); }]);
 
       // DP Browser for machine state DP
       var _dpBrowserCallback = null, _selectedDp = null;

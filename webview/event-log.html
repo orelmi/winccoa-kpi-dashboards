@@ -1,0 +1,57 @@
+<!-- WinCC OA KPI — Event Log / Audit Trail
+     Loaded via loadSnippet() in WebView EWO or standalone in browser. -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="css/style.css">
+
+  <header class="app-header" id="appHeader"></header>
+  <nav class="tab-nav" id="appNav"></nav>
+
+  <main class="tab-content">
+    <div class="pane-toolbar">
+      <h2>Event Log</h2>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <select id="eventLogFilter" style="padding:6px 10px;font-size:13px;border-radius:var(--radius);border:1px solid var(--border);">
+          <option value="">All modules</option>
+          <option value="sources">Sources</option>
+          <option value="aggregations">Aggregations</option>
+          <option value="machines">Machines</option>
+          <option value="oee">OEE</option>
+          <option value="calendar">Calendar</option>
+          <option value="assets">Assets</option>
+        </select>
+        <button class="btn btn-secondary btn-sm" id="btnClearEventLog">Clear Log</button>
+      </div>
+    </div>
+    <table class="config-table" id="eventLogTable">
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Action</th>
+          <th>Module</th>
+          <th>Item</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody id="eventLogBody"></tbody>
+    </table>
+    <div class="empty-state" id="eventLogEmpty">
+      <p>No events recorded yet. Configuration changes will appear here automatically.</p>
+    </div>
+  </main>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Scripts -->
+  <script src="js/kpi.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/eventLog.js"></script>
+  <script>
+    (function() {
+      const mode = KPI.init();
+      Nav.render('event-log');
+      Nav.updateConnectionStatus(mode);
+      EventLog.init();
+    })();
+  </script>

@@ -69,6 +69,19 @@ Source datapoint registration with metadata:
 - **Cause Categories:** Mechanical, Electrical, Process, Operator, Quality, Supply
 - Default preset: 6 states + 9 causes pre-configured
 
+### State Templates
+
+Predefined templates for common machine types:
+
+| Template | States | Description |
+|----------|--------|-------------|
+| Standard 6-State | 6 states, 9 causes | Default industrial machine |
+| Simple 3-State | 3 states (Running, Stopped, Maintenance) | Basic equipment |
+| Packaging 8-State | 8 states, 5 causes | Packaging line with changeover, cleaning |
+| CNC 7-State | 7 states, 6 causes | CNC machine with warmup, tool change |
+
+Custom templates can be saved from any machine configuration and reused across machines.
+
 ## 4. Production Calendar
 
 ### Shift Definitions
@@ -104,7 +117,7 @@ MTTR = Total Repair Time / Number of Failures
 
 | KPI | Formula | Sources |
 |-----|---------|---------|
-| Availability | (Planned Time - Unplanned Stops) / Planned Time | Machine states |
+| Availability | (Planned Time - Unplanned Stops) / Planned Time | Machine states + calendar |
 | Performance | (Ideal Cycle Time x Total Pieces) / Run Time | Piece counter + cycle time or design speed |
 | Quality | Good Pieces / Total Pieces | Good/reject counter or fixed ratio |
 | OEE | A x P x Q | Composite |
@@ -155,3 +168,36 @@ Download buttons for: State Analysis, Cause Analysis, OEE Summary.
 ## 9. Dashboard Gantt Compatibility
 
 Export value-to-label-to-color mapping tables for the WinCC OA Dashboard Gantt Chart widget. Mapping stored in `KPI_Config.ganttMappings`.
+
+## 10. Calendar-Based Planned Production Time
+
+OEE configurations support two calendar modes:
+
+| Mode | Description |
+|------|-------------|
+| FIXED | Fixed planned hours per day (default) |
+| CALENDAR | Planned time computed from shift schedules |
+
+In CALENDAR mode, both the CTRL engine and JS analysis iterate day-by-day through the selected period, summing PRODUCTION-category shift durations active for each day's weekday. Exceptions (holidays, shutdowns) skip production time; OVERTIME exceptions add it.
+
+## 11. KPI Roll-Up
+
+When an asset context covers multiple machines (e.g. a Line or Area), the OEE Analysis page offers a **Roll-Up** option in the machine selector. Roll-up computes:
+
+- **Weighted-average OEE** across all machines in context, weighted by producing time
+- **Per-machine breakdown table** showing individual A, P, Q, OEE values
+- **Aggregate TEEP, MTBF, MTTR** across all machines
+
+## 12. Event Log / Audit Trail
+
+All configuration changes are automatically logged:
+
+| Field | Description |
+|-------|-------------|
+| Timestamp | ISO 8601 timestamp |
+| Action | create, update, delete, correction, recalc |
+| Module | sources, aggregations, machines, oee, calendar, assets |
+| Item | Name of the affected item |
+| Details | Additional context (e.g. period, datapoint) |
+
+Events are stored in `KPI_Config.eventLog` (max 500 entries, oldest pruned). The Event Log page provides filtering by module and a clear function.

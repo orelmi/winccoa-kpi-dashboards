@@ -83,6 +83,8 @@
   <script src="js/kpi.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/nav.js"></script>
+  <script src="js/assetConfig.js"></script>
+  <script src="js/calendarConfig.js"></script>
   <script src="js/sourceConfig.js"></script>
   <script src="js/machineStateConfig.js"></script>
   <script src="js/oeeConfig.js"></script>
@@ -92,6 +94,9 @@
       const mode = KPI.init();
       Nav.render('oee-analysis');
       Nav.updateConnectionStatus(mode);
+      AssetConfig.init();         // Data-only (provides context filtering)
+      Nav.renderContextFilter([function() { OeeAnalysis.refreshMachineSelect(); }]);
+      CalendarConfig.init();      // Data-only (needed for calendar-based planned time)
       SourceConfig.init();        // Data-only (needed for OEE performance/quality calc)
       MachineStateConfig.init();  // Data-only (needed for machine select + state defs)
       OeeConfig.init();           // Data-only (needed for OEE config lookup)

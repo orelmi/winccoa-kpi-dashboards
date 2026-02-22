@@ -130,6 +130,8 @@
   <script src="js/kpi.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/nav.js"></script>
+  <script src="js/assetConfig.js"></script>
+  <script src="js/eventLog.js"></script>
   <script src="js/sourceConfig.js"></script>
   <script src="js/aggregationConfig.js"></script>
   <script>
@@ -138,6 +140,9 @@
       Nav.render('aggregations');
       Nav.updateConnectionStatus(mode);
       Utils.initModalCloseButtons();
+      AssetConfig.init();        // Data-only (provides context filtering)
+      EventLog.init();           // Data-only (logs config changes)
+      Nav.renderContextFilter([function() { AggregationConfig.render(); }]);
       SourceConfig.init();       // Data-only (no DOM for sources on this page)
       AggregationConfig.init();  // Full init (DOM present)
     })();

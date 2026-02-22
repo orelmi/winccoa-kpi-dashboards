@@ -210,6 +210,8 @@
   <script src="js/kpi.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/nav.js"></script>
+  <script src="js/assetConfig.js"></script>
+  <script src="js/eventLog.js"></script>
   <script src="js/calendarConfig.js"></script>
   <script>
     (function() {
@@ -217,6 +219,9 @@
       Nav.render('calendar');
       Nav.updateConnectionStatus(mode);
       Utils.initModalCloseButtons();
+      AssetConfig.init(); // Data-only (provides context for calendar inheritance)
+      EventLog.init();    // Data-only (logs config changes)
+      Nav.renderContextFilter([]);
       CalendarConfig.init();
     })();
   </script>

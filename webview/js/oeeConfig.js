@@ -30,7 +30,14 @@ const OeeConfig = (() => {
     const machines = MachineStateConfig.getAll();
     const sources = SourceConfig.getAll();
 
-    if (_oeeConfigs.length === 0) {
+    // Context filtering — show only items linked to active asset
+    let displayItems = _oeeConfigs;
+    if (typeof AssetConfig !== 'undefined' && AssetConfig.getContext()) {
+      const refs = AssetConfig.getRefsForContext();
+      displayItems = _oeeConfigs.filter(o => refs.oeeConfigs.includes(o.id));
+    }
+
+    if (displayItems.length === 0) {
       container.innerHTML = '';
       empty.style.display = 'block';
       return;
@@ -38,7 +45,7 @@ const OeeConfig = (() => {
 
     empty.style.display = 'none';
 
-    container.innerHTML = _oeeConfigs.map(oee => {
+    container.innerHTML = displayItems.map(oee => {
       const machine = machines.find(m => m.id === oee.machineRef);
       const machLabel = machine ? machine.name : 'Unknown';
 
@@ -98,7 +105,7 @@ const OeeConfig = (() => {
             '<div class="oee-detail-item">Pieces: <span>' + Utils.escapeHtml(piecesLabel) + '</span></div>' +
           '</div>' +
           '<div class="oee-detail-row">' +
-            '<div class="oee-detail-item">Planned hours: <span>' + oee.plannedHours + 'h/day</span></div>' +
+            '<div class="oee-detail-item">Planned time: <span>' + (oee.calendarMode === 'CALENDAR' ? 'Calendar shifts' : oee.plannedHours + 'h/day') + '</span></div>' +
             '<div class="oee-detail-item">Performance: <span>' + Utils.escapeHtml(perfDetail) + '</span></div>' +
             '<div class="oee-detail-item">Quality: <span>' + Utils.escapeHtml(qualDetail) + '</span></div>' +
           '</div>' +
@@ -140,6 +147,15 @@ const OeeConfig = (() => {
     );
   }
 
+  // ── Calendar mode toggle ────────────────────────────────────
+  function _onCalendarModeChange() {
+    var calMode = document.getElementById('oeeCalendarMode');
+    var grpHours = document.getElementById('grpPlannedHours');
+    if (calMode && grpHours) {
+      grpHours.style.display = calMode.value === 'FIXED' ? 'flex' : 'none';
+    }
+  }
+
   // ── Performance method toggle ───────────────────────────────
   function _onPerfMethodChange() {
     const method = document.getElementById('oeePerfMethod').value;
@@ -162,6 +178,8 @@ const OeeConfig = (() => {
     document.getElementById('oeeEditId').value = '';
     document.getElementById('oeeEnabled').checked = true;
     document.getElementById('oeePlannedHours').value = 24;
+    var calModeEl = document.getElementById('oeeCalendarMode');
+    if (calModeEl) { calModeEl.value = 'FIXED'; _onCalendarModeChange(); }
     document.getElementById('oeeIdealCycle').value = 1;
     document.getElementById('grpDesignSpeed').style.display = 'none';
     document.getElementById('grpRejectPieces').style.display = 'none';
@@ -180,6 +198,11 @@ const OeeConfig = (() => {
     document.getElementById('oeeEditId').value = id;
     document.getElementById('oeeName').value = oee.name;
     document.getElementById('oeePlannedHours').value = oee.plannedHours;
+    var calModeEl = document.getElementById('oeeCalendarMode');
+    if (calModeEl) {
+      calModeEl.value = oee.calendarMode || 'FIXED';
+      _onCalendarModeChange();
+    }
     document.getElementById('oeeAvailMethod').value = oee.availMethod || 'FROM_STATES';
     document.getElementById('oeePerfMethod').value = oee.perfMethod || 'CYCLE_TIME';
     document.getElementById('oeeIdealCycle').value = oee.idealCycleTime || 1;
@@ -233,6 +256,7 @@ const OeeConfig = (() => {
       id: editId || Utils.generateId(),
       name: document.getElementById('oeeName').value.trim(),
       machineRef: document.getElementById('oeeMachine').value,
+      calendarMode: document.getElementById('oeeCalendarMode') ? document.getElementById('oeeCalendarMode').value : 'FIXED',
       plannedHours: parseFloat(document.getElementById('oeePlannedHours').value) || 24,
       availMethod: document.getElementById('oeeAvailMethod').value,
       perfMethod: perfMethod,
@@ -289,6 +313,7 @@ const OeeConfig = (() => {
     render();
     Utils.closeModal('modalOee');
     Utils.toast('OEE "' + data.name + '" saved', 'success');
+    if (typeof EventLog !== 'undefined') EventLog.log(editId ? 'update' : 'create', 'oee', data.name, data.period);
   }
 
   // ── Delete ──────────────────────────────────────────────────
@@ -301,6 +326,7 @@ const OeeConfig = (() => {
     await save();
     render();
     Utils.toast('OEE configuration deleted', 'info');
+    if (typeof EventLog !== 'undefined') EventLog.log('delete', 'oee', oee.name);
   }
 
   // ── Init ────────────────────────────────────────────────────
@@ -311,6 +337,8 @@ const OeeConfig = (() => {
       document.getElementById('formOee').addEventListener('submit', saveFromForm);
       document.getElementById('oeePerfMethod').addEventListener('change', _onPerfMethodChange);
       document.getElementById('oeeQualityMethod').addEventListener('change', _onQualityMethodChange);
+      var calModeEl = document.getElementById('oeeCalendarMode');
+      if (calModeEl) calModeEl.addEventListener('change', _onCalendarModeChange);
       // Re-render when dependencies change
       SourceConfig.onChange(() => { render(); });
       MachineStateConfig.onChange(() => { render(); });

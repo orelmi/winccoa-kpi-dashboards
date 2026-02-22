@@ -45,9 +45,18 @@
           <p class="form-hint">Availability = (Planned Production Time - Unplanned Downtime) / Planned Production Time</p>
           <div class="form-row">
             <div class="form-group">
+              <label for="oeeCalendarMode">Planned Time Source</label>
+              <select id="oeeCalendarMode">
+                <option value="FIXED">Fixed Hours/Day</option>
+                <option value="CALENDAR">From Production Calendar (shifts)</option>
+              </select>
+            </div>
+            <div class="form-group" id="grpPlannedHours">
               <label for="oeePlannedHours">Planned Production Hours/Day</label>
               <input type="number" id="oeePlannedHours" value="24" min="0" max="24" step="0.5">
             </div>
+          </div>
+          <div class="form-row">
             <div class="form-group">
               <label for="oeeAvailMethod">Calculation Method</label>
               <select id="oeeAvailMethod">
@@ -239,6 +248,8 @@
   <script src="js/kpi.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/nav.js"></script>
+  <script src="js/assetConfig.js"></script>
+  <script src="js/eventLog.js"></script>
   <script src="js/sourceConfig.js"></script>
   <script src="js/machineStateConfig.js"></script>
   <script src="js/oeeConfig.js"></script>
@@ -248,6 +259,9 @@
       Nav.render('oee-config');
       Nav.updateConnectionStatus(mode);
       Utils.initModalCloseButtons();
+      AssetConfig.init();         // Data-only (provides context filtering)
+      EventLog.init();            // Data-only (logs config changes)
+      Nav.renderContextFilter([function() { OeeConfig.render(); }]);
       SourceConfig.init();        // Data-only (populates selects)
       MachineStateConfig.init();  // Data-only (populates selects)
       OeeConfig.init();           // Full init (DOM present)

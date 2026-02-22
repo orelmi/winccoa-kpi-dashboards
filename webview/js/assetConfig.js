@@ -406,6 +406,7 @@ const AssetConfig = (() => {
 
     Utils.closeModal('modalAsset');
     Utils.toast('Asset "' + data.name + '" saved', 'success');
+    if (typeof EventLog !== 'undefined') EventLog.log(editId ? 'update' : 'create', 'assets', data.name, data.type);
   }
 
   async function confirmRemove(id) {
@@ -418,6 +419,7 @@ const AssetConfig = (() => {
     if (!confirm(msg)) return;
     await remove(id);
     Utils.toast('Asset deleted', 'info');
+    if (typeof EventLog !== 'undefined') EventLog.log('delete', 'assets', a.name);
   }
 
   // ── Link refs modal ────────────────────────────────────────

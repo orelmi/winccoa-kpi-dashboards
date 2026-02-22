@@ -27,6 +27,7 @@ $startPage:machines       → Machine state definitions
 $startPage:calendar       → Production calendar / shifts
 $startPage:oee-config     → OEE configuration
 $startPage:oee-analysis   → Live OEE analysis
+$startPage:event-log      → Event log / audit trail
 ```
 
 ## Organizing Assets
@@ -60,10 +61,15 @@ Use the **Browse** button to select datapoints from the WinCC OA DP tree.
 
 1. Navigate to **Machine States**
 2. Click **+ Add Machine**
-3. Enter the machine name and state datapoint
-4. Add state definitions (value, label, category, color)
-5. Optionally enable cause tracking and define causes
-6. Click **Save Machine**
+3. **Optionally apply a template** from the dropdown (Standard 6-State, Simple 3-State, Packaging, CNC, or custom)
+4. Enter the machine name and state datapoint
+5. Add/modify state definitions (value, label, category, color)
+6. Optionally enable cause tracking and define causes
+7. Click **Save Machine**
+
+### Saving Custom Templates
+
+After configuring states and causes, click **Save as Template** in the modal to save the current configuration as a reusable template. Custom templates appear in the template dropdown for future machines.
 
 ## Configuring the Production Calendar
 
@@ -77,7 +83,8 @@ Use the **Browse** button to select datapoints from the WinCC OA DP tree.
 1. Navigate to **OEE Config**
 2. Click **+ Add OEE Line**
 3. Select the machine and configure:
-   - **Availability:** Planned hours/day, calculation method
+   - **Calendar Mode:** Choose "Fixed" (manual hours/day) or "Calendar" (planned time from shift schedules)
+   - **Availability:** Planned hours/day (if Fixed mode), calculation method
    - **Performance:** Ideal cycle time or design speed + pieces source
    - **Quality:** Good pieces counter, reject counter, or fixed ratio
 4. Optionally set **microstop threshold** and **KPI limits**
@@ -91,6 +98,15 @@ Use the **Browse** button to select datapoints from the WinCC OA DP tree.
 4. View:
    - **Overview:** OEE gauges, Gantt chart, time model, state table, cause Pareto
    - **Time Comparison:** Side-by-side period comparison
+
+### KPI Roll-Up (Multi-Machine)
+
+When an asset context with multiple machines is active, a **Roll-Up** option appears in the machine selector:
+
+1. Set an asset context (e.g. a Line or Area) on the **Assets** page
+2. Navigate to **OEE Analysis**
+3. Select **Roll-Up (all machines in context)** from the machine dropdown
+4. Click **Refresh** — displays weighted-average OEE with per-machine breakdown
 
 ### Exporting Data
 
@@ -106,3 +122,19 @@ Use the **Export** toolbar above the analysis results:
 3. Load a time period to view archive history
 4. Enter a timestamp and corrected value, click **Apply Correction**
 5. Click **Recalculate KPIs** to trigger recalculation for the affected period
+
+## Using the Asset Context Filter
+
+All configuration pages respect the active asset context:
+
+1. Navigate to **Assets** and click an asset name to set the context
+2. On any other page (Sources, Aggregations, Machines, OEE Config), a **filter bar** appears showing the active context
+3. Only items linked to the selected asset (and its descendants) are displayed
+4. Click **Show all** in the filter bar to clear the filter and see all items
+
+## Viewing the Event Log
+
+1. Navigate to **Event Log**
+2. View all configuration changes with timestamps, actions, and details
+3. Use the **filter dropdown** to show only events from a specific module
+4. Click **Clear Log** to remove all entries (with confirmation)

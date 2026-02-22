@@ -27,6 +27,12 @@ const OeeAnalysis = (() => {
       return;
     }
 
+    // Handle multi-machine roll-up
+    if (machineId === '__ROLLUP__') {
+      await _refreshRollup();
+      return;
+    }
+
     _currentMachineId = machineId;
     const machine = MachineStateConfig.getById(machineId);
     if (!machine) {
@@ -396,10 +402,71 @@ const OeeAnalysis = (() => {
     return { filtered, microstopCount, microstopTotalSec };
   }
 
+  // ── Compute planned seconds from calendar shifts ────────────
+  function _calcPlannedFromCalendar(tStart, tEnd) {
+    if (typeof CalendarConfig === 'undefined') return 0;
+    const cal = CalendarConfig.getAll();
+    const shifts = cal.shifts || [];
+    const exceptions = cal.exceptions || [];
+    let plannedSec = 0;
+
+    // Build exception date set
+    const exDates = {};
+    exceptions.forEach(function(ex) { exDates[ex.date] = ex.category; });
+
+    // Iterate day by day
+    const dayMs = 86400000;
+    let current = new Date(tStart.getFullYear(), tStart.getMonth(), tStart.getDate());
+    const endDay = new Date(tEnd.getFullYear(), tEnd.getMonth(), tEnd.getDate(), 23, 59, 59);
+
+    while (current <= endDay) {
+      const dateStr = current.toISOString().slice(0, 10);
+
+      // Check exception
+      if (exDates[dateStr] && exDates[dateStr] !== 'OVERTIME') {
+        current = new Date(current.getTime() + dayMs);
+        continue;
+      }
+
+      const dow = current.getDay(); // 0=Sun
+
+      for (var i = 0; i < shifts.length; i++) {
+        var s = shifts[i];
+        if (!s.enabled) continue;
+        if (s.category !== 'PRODUCTION') continue;
+        if (!s.days || s.days.indexOf(dow) === -1) continue;
+
+        var startMin = _parseTimeMinutes(s.startTime);
+        var endMin = _parseTimeMinutes(s.endTime);
+        var dur;
+        if (endMin > startMin) {
+          dur = (endMin - startMin) * 60;
+        } else {
+          dur = (1440 - startMin + endMin) * 60;
+        }
+        plannedSec += dur;
+      }
+
+      current = new Date(current.getTime() + dayMs);
+    }
+    return plannedSec;
+  }
+
+  function _parseTimeMinutes(timeStr) {
+    var parts = (timeStr || '00:00').split(':');
+    return parseInt(parts[0]) * 60 + parseInt(parts[1] || 0);
+  }
+
   // ── Compute OEE from raw archive data ───────────────────────
   async function _computeOeeFromArchive(oeeConf, machine, stateStats, tRange) {
     const totalPeriodSec = (tRange.end.getTime() - tRange.start.getTime()) / 1000;
-    const plannedSec = oeeConf.plannedHours * 3600 * (totalPeriodSec / 86400);
+    let plannedSec;
+    if (oeeConf.calendarMode === 'CALENDAR') {
+      plannedSec = _calcPlannedFromCalendar(tRange.start, tRange.end);
+      if (plannedSec <= 0) plannedSec = totalPeriodSec; // Fallback
+    } else {
+      plannedSec = oeeConf.plannedHours * 3600 * (totalPeriodSec / 86400);
+    }
 
     // ── Availability ──────────────────────────────────────────
     let producingTime = 0;
@@ -544,8 +611,14 @@ const OeeAnalysis = (() => {
   function _computeTeep(oeeResult, oeeConf, tRange) {
     const calendarSec = (tRange.end.getTime() - tRange.start.getTime()) / 1000;
     if (calendarSec <= 0) return null;
-    const periodDays = calendarSec / 86400;
-    const plannedSec = (oeeConf.plannedHours || 24) * 3600 * periodDays;
+    let plannedSec;
+    if (oeeConf.calendarMode === 'CALENDAR') {
+      plannedSec = _calcPlannedFromCalendar(tRange.start, tRange.end);
+      if (plannedSec <= 0) plannedSec = calendarSec;
+    } else {
+      const periodDays = calendarSec / 86400;
+      plannedSec = (oeeConf.plannedHours || 24) * 3600 * periodDays;
+    }
     const loading = Math.min(plannedSec / calendarSec, 1);
     return oeeResult.oee * loading;
   }
@@ -1192,6 +1265,129 @@ const OeeAnalysis = (() => {
     return fmt(tRange.start) + '_to_' + fmt(tRange.end);
   }
 
+  // ── Multi-machine roll-up ───────────────────────────────────
+  // Computes weighted-average OEE across all machines in context.
+  // Weight = planned production time (run time) for each machine.
+  async function _refreshRollup() {
+    const tRange = _getSelectedTimeRange();
+    const refs = AssetConfig.getRefsForContext();
+    const allMachines = MachineStateConfig.getAll();
+    const machines = allMachines.filter(m => refs.machines.includes(m.id));
+    const oeeConfigs = OeeConfig.getAll();
+    const ctxAsset = AssetConfig.getContextAsset();
+
+    const container = document.getElementById('analysisResults');
+    if (!container) return;
+    container.innerHTML = '<div class="analysis-empty">Computing roll-up for ' + machines.length + ' machines...</div>';
+
+    const results = [];
+    let totalWeight = 0;
+    let sumA = 0, sumP = 0, sumQ = 0, sumOee = 0, sumTeep = 0;
+    let totalFailures = 0, totalUptime = 0, totalRepairTime = 0;
+
+    for (var i = 0; i < machines.length; i++) {
+      var machine = machines[i];
+      var oeeConf = oeeConfigs.find(o => o.machineRef === machine.id) || null;
+      if (!oeeConf) continue;
+
+      var stateHistoryRaw = await _queryStateHistory(machine.stateDp, tRange.start, tRange.end);
+      var microstopThreshold = oeeConf.microstopThresholdSec || 0;
+      var microstopResult = _filterMicrostops(stateHistoryRaw, machine.states, tRange.start, tRange.end, microstopThreshold);
+      var stateStats = _computeStateStats(microstopResult.filtered, machine.states, tRange.start, tRange.end);
+
+      var oeeResult = await _computeOeeFromArchive(oeeConf, machine, stateStats, tRange);
+      if (!oeeResult) continue;
+
+      // Weight by run time (producing time)
+      var runTime = 0;
+      for (var key in stateStats) {
+        if (stateStats[key].category === 'PRODUCING') runTime += stateStats[key].totalSeconds;
+      }
+      var weight = Math.max(runTime, 1);
+      totalWeight += weight;
+
+      sumA += oeeResult.availability * weight;
+      sumP += oeeResult.performance * weight;
+      sumQ += oeeResult.quality * weight;
+      sumOee += oeeResult.oee * weight;
+
+      var teep = _computeTeep(oeeResult, oeeConf, tRange);
+      if (teep != null) sumTeep += teep * weight;
+
+      var mtbfMttr = _computeMtbfMttr(microstopResult.filtered, machine.states, tRange.start, tRange.end);
+      if (mtbfMttr.failureCount > 0) {
+        totalFailures += mtbfMttr.failureCount;
+        totalUptime += mtbfMttr.mtbf * mtbfMttr.failureCount;
+        totalRepairTime += mtbfMttr.mttr * mtbfMttr.failureCount;
+      }
+
+      results.push({
+        machine: machine,
+        oee: oeeResult,
+        teep: teep,
+        mtbf: mtbfMttr.mtbf,
+        mttr: mtbfMttr.mttr,
+      });
+    }
+
+    if (results.length === 0) {
+      container.innerHTML = '<div class="analysis-empty">No OEE data available for machines in this context.</div>';
+      return;
+    }
+
+    // Weighted averages
+    var avgA = totalWeight > 0 ? sumA / totalWeight : 0;
+    var avgP = totalWeight > 0 ? sumP / totalWeight : 0;
+    var avgQ = totalWeight > 0 ? sumQ / totalWeight : 0;
+    var avgOee = totalWeight > 0 ? sumOee / totalWeight : 0;
+    var avgTeep = totalWeight > 0 ? sumTeep / totalWeight : 0;
+    var aggMtbf = totalFailures > 0 ? totalUptime / totalFailures : null;
+    var aggMttr = totalFailures > 0 ? totalRepairTime / totalFailures : null;
+
+    var fmtPct = function(v) { return v != null ? (v * 100).toFixed(1) + '%' : '-'; };
+    var fmtSec = function(v) { return v != null ? Utils.formatDuration(v) : '-'; };
+
+    // Render roll-up summary
+    var html = '<div class="rollup-header">' +
+      '<h3>Roll-up: ' + Utils.escapeHtml(ctxAsset.name) + ' (' + results.length + ' machines)</h3>' +
+      '</div>';
+
+    html += '<div class="oee-gauges">';
+    html += _gaugeHtml('OEE', avgOee, null);
+    html += _gaugeHtml('Availability', avgA, null);
+    html += _gaugeHtml('Performance', avgP, null);
+    html += _gaugeHtml('Quality', avgQ, null);
+    html += '</div>';
+
+    html += '<div class="kpi-cards">';
+    html += _kpiCard('TEEP', fmtPct(avgTeep), 'Weighted avg across machines', '');
+    html += _kpiCard('MTBF', fmtSec(aggMtbf), totalFailures + ' total failures', '');
+    html += _kpiCard('MTTR', fmtSec(aggMttr), '', '');
+    html += '</div>';
+
+    // Per-machine breakdown table
+    html += '<h3 style="margin-top:20px;">Per-Machine Breakdown</h3>';
+    html += '<table class="config-table compact"><thead><tr>' +
+      '<th>Machine</th><th>OEE</th><th>A</th><th>P</th><th>Q</th><th>TEEP</th><th>MTBF</th><th>MTTR</th>' +
+      '</tr></thead><tbody>';
+    for (var j = 0; j < results.length; j++) {
+      var r = results[j];
+      html += '<tr>' +
+        '<td>' + Utils.escapeHtml(r.machine.name) + '</td>' +
+        '<td><strong>' + fmtPct(r.oee.oee) + '</strong></td>' +
+        '<td>' + fmtPct(r.oee.availability) + '</td>' +
+        '<td>' + fmtPct(r.oee.performance) + '</td>' +
+        '<td>' + fmtPct(r.oee.quality) + '</td>' +
+        '<td>' + fmtPct(r.teep) + '</td>' +
+        '<td>' + fmtSec(r.mtbf) + '</td>' +
+        '<td>' + fmtSec(r.mttr) + '</td>' +
+        '</tr>';
+    }
+    html += '</tbody></table>';
+
+    container.innerHTML = html;
+  }
+
   function _renderEmpty(msg) {
     const container = document.getElementById('analysisResults');
     if (container) {
@@ -1203,8 +1399,25 @@ const OeeAnalysis = (() => {
   function refreshMachineSelect() {
     const select = document.getElementById('analysisMachineSelect');
     if (!select) return;
-    const machines = MachineStateConfig.getAll();
-    Utils.populateMachineSelect(select, machines, _currentMachineId);
+    let machines = MachineStateConfig.getAll();
+    // Context filtering — show only machines linked to active asset
+    let hasContext = typeof AssetConfig !== 'undefined' && AssetConfig.getContext();
+    if (hasContext) {
+      const refs = AssetConfig.getRefsForContext();
+      machines = machines.filter(m => refs.machines.includes(m.id));
+    }
+    // Add roll-up option when context has multiple machines
+    select.innerHTML = '<option value="">-- Select Machine --</option>';
+    if (hasContext && machines.length > 1) {
+      const ctxAsset = AssetConfig.getContextAsset();
+      select.innerHTML += '<option value="__ROLLUP__">Roll-up: All ' + machines.length +
+        ' machines (' + Utils.escapeHtml(ctxAsset.name) + ')</option>';
+    }
+    machines.forEach(function(m) {
+      var selected = m.id === _currentMachineId ? ' selected' : '';
+      select.innerHTML += '<option value="' + m.id + '"' + selected + '>' +
+        Utils.escapeHtml(m.name) + '</option>';
+    });
   }
 
   // ── Period preset toggle ────────────────────────────────────

@@ -38,7 +38,14 @@ const SourceConfig = (() => {
     const empty = document.getElementById('sourceEmpty');
     const table = document.getElementById('sourceTable');
 
-    if (_sources.length === 0) {
+    // Context filtering — show only items linked to active asset
+    let displayItems = _sources;
+    if (typeof AssetConfig !== 'undefined' && AssetConfig.getContext()) {
+      const refs = AssetConfig.getRefsForContext();
+      displayItems = _sources.filter(s => refs.sources.includes(s.id));
+    }
+
+    if (displayItems.length === 0) {
       table.style.display = 'none';
       empty.style.display = 'block';
       return;
@@ -47,7 +54,7 @@ const SourceConfig = (() => {
     table.style.display = 'table';
     empty.style.display = 'none';
 
-    tbody.innerHTML = _sources.map(src => {
+    tbody.innerHTML = displayItems.map(src => {
       const archBadge = src.archiving && src.archiving.enabled
         ? '<span class="tag tag-enabled">' + Utils.escapeHtml(src.archiving.archiveClass || 'ON') + '</span>'
         : '<span class="tag tag-disabled">OFF</span>';
@@ -143,6 +150,7 @@ const SourceConfig = (() => {
     _notifyChange();
     Utils.closeModal('modalSource');
     Utils.toast('Source "' + data.name + '" saved', 'success');
+    if (typeof EventLog !== 'undefined') EventLog.log(editId ? 'update' : 'create', 'sources', data.name, data.dpSource);
   }
 
   // ── Delete ──────────────────────────────────────────────────
@@ -156,6 +164,7 @@ const SourceConfig = (() => {
     render();
     _notifyChange();
     Utils.toast('Source deleted', 'info');
+    if (typeof EventLog !== 'undefined') EventLog.log('delete', 'sources', src.name);
   }
 
   // ── Init ────────────────────────────────────────────────────

@@ -19,6 +19,11 @@ Inspired by Siemens Performance Insight (Industrial Edge).
 - **Archive Correction** — View/correct archived values with KPI recalculation trigger
 - **CSV Export** — Download state analysis, cause analysis, OEE summary
 - **Dashboard Gantt Compatibility** — Export mapping tables for WinCC OA Dashboard Gantt Chart widget
+- **Asset Context Filtering** — All configuration pages filter by active asset context; context filter bar with "Show all" reset
+- **Calendar-Based Planned Time** — OEE engine computes planned production time from shift schedules instead of fixed hours/day
+- **KPI Roll-Up** — Weighted-average OEE across all machines in an asset context (line/area/site level), with per-machine breakdown
+- **Machine State Templates** — Predefined templates (Standard 6-State, Simple 3-State, Packaging 8-State, CNC 7-State) plus custom user-saved templates
+- **Event Log / Audit Trail** — Tracks all configuration changes (create, update, delete) with timestamp, module, and details
 
 ### Not Yet Implemented
 
@@ -27,7 +32,6 @@ Inspired by Siemens Performance Insight (Industrial Edge).
 - Histogram / Boxplot Widgets (statistical distribution)
 - Report Generation (scheduled Excel/CSV/PDF with email)
 - Post-Production Reason Editing (reclassify causes after the fact)
-- Multi-Asset Aggregation (plant-level roll-up KPI calculations)
 
 ## Quick Start
 
@@ -63,6 +67,7 @@ The panel accepts a `$startPage` parameter to load a specific page directly (e.g
 | Calendar | `calendar.html` | Shift schedules + exceptions + MES/ERP connector |
 | OEE Config | `oee-config.html` | OEE calculation configuration |
 | OEE Analysis | `oee-analysis.html` | Live OEE analysis dashboard |
+| Event Log | `event-log.html` | Audit trail of all configuration changes |
 
 Each page is self-contained and can be loaded independently into any WinCC OA WebView panel.
 Navigation between pages is handled by the CTRL panel script (`loadSnippet`).

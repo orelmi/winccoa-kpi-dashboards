@@ -49,18 +49,20 @@ webview/
 ├── calendar.html           # Production calendar / shift page
 ├── oee-config.html         # OEE configuration page
 ├── oee-analysis.html       # Live OEE analysis page
+├── event-log.html          # Event log / audit trail page
 ├── css/style.css           # Industrial theme (Siemens-inspired)
 └── js/
     ├── kpi.js              # Domain-oriented data access + mock mode
     ├── utils.js            # Helpers, constants, formatting
-    ├── nav.js              # Shared page navigation + context badge
+    ├── nav.js              # Shared page navigation + context badge + context filter
     ├── assetConfig.js      # Asset tree + context provider (self-contained)
     ├── sourceConfig.js     # Source datapoint configuration
     ├── aggregationConfig.js # KPI aggregation configuration
-    ├── machineStateConfig.js # Machine state configuration
+    ├── machineStateConfig.js # Machine state config + templates
     ├── calendarConfig.js   # Production calendar + shift + connector
-    ├── oeeConfig.js        # OEE configuration
-    ├── oeeAnalysis.js      # Real-time OEE analysis
+    ├── oeeConfig.js        # OEE configuration (supports calendar mode)
+    ├── oeeAnalysis.js      # Real-time OEE analysis + roll-up
+    ├── eventLog.js         # Event log / audit trail
     └── correctionManager.js # Archive data correction
 
 scripts/libs/
@@ -98,6 +100,12 @@ Refs: machines[], sources[], oee[]     →  link configs to assets
 
 **Context persistence:** The current asset context is stored in `localStorage` so it survives page navigation (each `loadSnippet` reloads the entire page).
 
+### Context Filter Bar
+
+When a context is active, `Nav.renderContextFilter(reRenderCallbacks)` inserts a filter bar below the navigation showing the active asset path with a "Show all" button. When cleared, all registered re-render callbacks are invoked to refresh page content unfiltered.
+
+Each module's `render()` method checks for an active context via `AssetConfig.getContext()` and filters its display items using `AssetConfig.getRefsForContext()`. Without an active context, all items are shown.
+
 ## CTRL Commands
 
 | Domain Command | CTRL Implementation | Description |
@@ -133,6 +141,9 @@ Stores all configuration as JSON strings:
 | calendar | Calendar/shift configs |
 | recalcRequest | Recalculation trigger |
 | ganttMappings | Dashboard Gantt mappings |
+| eventLog | Event log / audit trail entries |
+| stateTemplates | Custom machine state templates |
+| assets | Asset hierarchy configs |
 
 ### KPI_Result
 

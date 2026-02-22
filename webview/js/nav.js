@@ -16,6 +16,7 @@ const Nav = (() => {
     { id: 'calendar',      label: 'Calendar',        icon: '&#128197;' },
     { id: 'oee-config',    label: 'OEE Config',      icon: '&#9733;' },
     { id: 'oee-analysis',  label: 'OEE Analysis',    icon: '&#128202;' },
+    { id: 'event-log',     label: 'Event Log',       icon: '&#128220;' },
   ];
 
   function render(activePageId) {
@@ -76,6 +77,45 @@ const Nav = (() => {
     badge.onclick = function() { KPI.navigate('assets'); };
   }
 
+  // ── Context filter bar (shows active filter below nav) ──────
+  function renderContextFilter(reRenderCallbacks) {
+    let bar = document.getElementById('contextFilterBar');
+    if (!bar) {
+      const nav = document.getElementById('appNav');
+      if (!nav) return;
+      bar = document.createElement('div');
+      bar.id = 'contextFilterBar';
+      bar.className = 'context-filter-bar';
+      nav.parentNode.insertBefore(bar, nav.nextSibling);
+    }
+
+    if (typeof AssetConfig === 'undefined' || !AssetConfig.getContext()) {
+      bar.style.display = 'none';
+      return;
+    }
+
+    const path = AssetConfig.getContextPath();
+    const label = path.map(a => a.name).join(' &rsaquo; ');
+    const asset = AssetConfig.getContextAsset();
+    const typeDef = AssetConfig.ASSET_TYPES[asset.type] || {};
+    bar.style.display = 'flex';
+    bar.innerHTML =
+      '<span class="context-filter-label">' +
+        '<span class="context-filter-icon">' + (typeDef.icon || '') + '</span> ' +
+        'Filtered by: <strong>' + label + '</strong>' +
+      '</span>' +
+      '<button class="btn btn-sm btn-secondary" id="btnClearContext">Show all</button>';
+
+    document.getElementById('btnClearContext').addEventListener('click', function() {
+      AssetConfig.setContext(null);
+      _refreshContextBadge();
+      renderContextFilter(reRenderCallbacks);
+      if (Array.isArray(reRenderCallbacks)) {
+        reRenderCallbacks.forEach(function(cb) { cb(); });
+      }
+    });
+  }
+
   function updateConnectionStatus(mode) {
     const badge = document.getElementById('connectionStatus');
     if (!badge) return;
@@ -88,5 +128,5 @@ const Nav = (() => {
     }
   }
 
-  return { render, updateConnectionStatus, PAGES };
+  return { render, updateConnectionStatus, renderContextFilter, PAGES };
 })();

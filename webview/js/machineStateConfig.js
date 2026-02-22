@@ -49,13 +49,139 @@ const MachineStateConfig = (() => {
     { code: '0', label: 'Unknown / Other', category: 'OTHER' },
   ];
 
+  // ── Reusable state templates ──────────────────────────────
+  const STATE_TEMPLATES = {
+    'STANDARD_6': {
+      name: 'Standard 6-State (default)',
+      states: DEFAULT_STATES,
+      causes: DEFAULT_CAUSES,
+    },
+    'SIMPLE_3': {
+      name: 'Simple 3-State',
+      states: [
+        { value: '0', label: 'Off', category: 'UNPLANNED_STOP', color: '#d9363e', isPlanned: false },
+        { value: '1', label: 'Running', category: 'PRODUCING', color: '#28a745', isPlanned: false },
+        { value: '2', label: 'Standby', category: 'IDLE', color: '#ffc107', isPlanned: false },
+      ],
+      causes: [],
+    },
+    'PACKAGING': {
+      name: 'Packaging Line (8-State)',
+      states: [
+        { value: '0', label: 'Emergency Stop', category: 'UNPLANNED_STOP', color: '#d9363e', isPlanned: false },
+        { value: '1', label: 'Producing', category: 'PRODUCING', color: '#28a745', isPlanned: false },
+        { value: '2', label: 'Starved (no input)', category: 'IDLE', color: '#ffc107', isPlanned: false },
+        { value: '3', label: 'Blocked (output full)', category: 'IDLE', color: '#e6c300', isPlanned: false },
+        { value: '4', label: 'Changeover', category: 'SETUP', color: '#6f42c1', isPlanned: true },
+        { value: '5', label: 'Cleaning', category: 'MAINTENANCE', color: '#17a2b8', isPlanned: true },
+        { value: '6', label: 'Planned Stop', category: 'PLANNED_STOP', color: '#6c757d', isPlanned: true },
+        { value: '7', label: 'Breakdown', category: 'UNPLANNED_STOP', color: '#b02a37', isPlanned: false },
+      ],
+      causes: [
+        { code: '1', label: 'Mechanical failure', category: 'MECHANICAL' },
+        { code: '2', label: 'Electrical failure', category: 'ELECTRICAL' },
+        { code: '3', label: 'Sensor failure', category: 'ELECTRICAL' },
+        { code: '4', label: 'Material jam', category: 'PROCESS' },
+        { code: '5', label: 'Label misalignment', category: 'PROCESS' },
+        { code: '6', label: 'No material', category: 'SUPPLY' },
+        { code: '7', label: 'Operator error', category: 'OPERATOR' },
+        { code: '8', label: 'Quality reject', category: 'QUALITY' },
+        { code: '0', label: 'Unknown / Other', category: 'OTHER' },
+      ],
+    },
+    'CNC': {
+      name: 'CNC Machine (7-State)',
+      states: [
+        { value: '0', label: 'Off', category: 'PLANNED_STOP', color: '#6c757d', isPlanned: true },
+        { value: '1', label: 'Machining', category: 'PRODUCING', color: '#28a745', isPlanned: false },
+        { value: '2', label: 'Tool Change', category: 'SETUP', color: '#6f42c1', isPlanned: true },
+        { value: '3', label: 'Loading/Unloading', category: 'IDLE', color: '#ffc107', isPlanned: false },
+        { value: '4', label: 'Warm-up', category: 'SETUP', color: '#fd7e14', isPlanned: true },
+        { value: '5', label: 'Alarm', category: 'UNPLANNED_STOP', color: '#d9363e', isPlanned: false },
+        { value: '6', label: 'Maintenance', category: 'MAINTENANCE', color: '#17a2b8', isPlanned: true },
+      ],
+      causes: [
+        { code: '1', label: 'Tool breakage', category: 'MECHANICAL' },
+        { code: '2', label: 'Spindle error', category: 'MECHANICAL' },
+        { code: '3', label: 'Axis error', category: 'ELECTRICAL' },
+        { code: '4', label: 'Program error', category: 'PROCESS' },
+        { code: '5', label: 'Material defect', category: 'QUALITY' },
+        { code: '0', label: 'Unknown', category: 'OTHER' },
+      ],
+    },
+  };
+
+  let _customTemplates = [];
+
+  async function _loadCustomTemplates() {
+    const data = await KPI.loadConfig('stateTemplates');
+    _customTemplates = Array.isArray(data) ? data : [];
+  }
+
+  async function _saveCustomTemplates() {
+    await KPI.saveConfig('stateTemplates', _customTemplates);
+  }
+
+  function applyTemplate(templateKey) {
+    let template = STATE_TEMPLATES[templateKey];
+    if (!template) {
+      template = _customTemplates.find(t => t.id === templateKey);
+    }
+    if (!template) return;
+    _renderStateRows(JSON.parse(JSON.stringify(template.states)));
+    if (template.causes && template.causes.length > 0) {
+      _renderCauseRows(JSON.parse(JSON.stringify(template.causes)));
+      document.getElementById('machTrackCauses').checked = true;
+      document.getElementById('causeDefSection').style.display = 'block';
+    }
+  }
+
+  async function saveAsTemplate() {
+    var name = prompt('Template name:');
+    if (!name) return;
+    var states = _collectStatesFromModal();
+    var causes = _collectCausesFromModal();
+    _customTemplates.push({
+      id: 'custom_' + Utils.generateId(),
+      name: name,
+      states: states,
+      causes: causes,
+    });
+    await _saveCustomTemplates();
+    _refreshTemplateSelect();
+    Utils.toast('Template "' + name + '" saved', 'success');
+  }
+
+  function _refreshTemplateSelect() {
+    var select = document.getElementById('machStateTemplate');
+    if (!select) return;
+    select.innerHTML = '<option value="">-- Load Template --</option>';
+    Object.entries(STATE_TEMPLATES).forEach(function(entry) {
+      select.innerHTML += '<option value="' + entry[0] + '">' + Utils.escapeHtml(entry[1].name) + '</option>';
+    });
+    if (_customTemplates.length > 0) {
+      select.innerHTML += '<optgroup label="Custom Templates">';
+      _customTemplates.forEach(function(t) {
+        select.innerHTML += '<option value="' + t.id + '">' + Utils.escapeHtml(t.name) + '</option>';
+      });
+      select.innerHTML += '</optgroup>';
+    }
+  }
+
   // ── Render machine list ─────────────────────────────────────
   function render() {
     const container = document.getElementById('machineList');
     if (!container) return; // Data-only mode: no DOM on this page
     const empty = document.getElementById('machineEmpty');
 
-    if (_machines.length === 0) {
+    // Context filtering — show only items linked to active asset
+    let displayItems = _machines;
+    if (typeof AssetConfig !== 'undefined' && AssetConfig.getContext()) {
+      const refs = AssetConfig.getRefsForContext();
+      displayItems = _machines.filter(m => refs.machines.includes(m.id));
+    }
+
+    if (displayItems.length === 0) {
       container.innerHTML = '';
       empty.style.display = 'block';
       return;
@@ -63,7 +189,7 @@ const MachineStateConfig = (() => {
 
     empty.style.display = 'none';
 
-    container.innerHTML = _machines.map(m => {
+    container.innerHTML = displayItems.map(m => {
       const stateChips = (m.states || []).map(st => {
         return '<span class="state-chip">' +
           '<span class="state-dot" style="background:' + Utils.escapeHtml(st.color) + '"></span>' +
@@ -224,6 +350,7 @@ const MachineStateConfig = (() => {
     _renderStateRows(DEFAULT_STATES);
     _renderCauseRows(DEFAULT_CAUSES);
     document.getElementById('causeDefSection').style.display = 'none';
+    _refreshTemplateSelect();
     Utils.openModal('modalMachine');
   }
 
@@ -276,6 +403,7 @@ const MachineStateConfig = (() => {
     _notifyChange();
     Utils.closeModal('modalMachine');
     Utils.toast('Machine "' + data.name + '" saved', 'success');
+    if (typeof EventLog !== 'undefined') EventLog.log(editId ? 'update' : 'create', 'machines', data.name, data.states.length + ' states');
   }
 
   // ── Delete ──────────────────────────────────────────────────
@@ -289,6 +417,7 @@ const MachineStateConfig = (() => {
     render();
     _notifyChange();
     Utils.toast('Machine deleted', 'info');
+    if (typeof EventLog !== 'undefined') EventLog.log('delete', 'machines', m.name);
   }
 
   // ── Cause tracking toggle ───────────────────────────────────
@@ -336,9 +465,25 @@ const MachineStateConfig = (() => {
       document.getElementById('btnAddStateDef').addEventListener('click', addStateRow);
       document.getElementById('btnAddCauseDef').addEventListener('click', addCauseRow);
       document.getElementById('machTrackCauses').addEventListener('change', _onTrackCausesChange);
+      // Template events
+      var templateSelect = document.getElementById('machStateTemplate');
+      if (templateSelect) {
+        templateSelect.addEventListener('change', function() {
+          if (this.value) { applyTemplate(this.value); this.value = ''; }
+        });
+      }
+      var btnSaveTemplate = document.getElementById('btnSaveAsTemplate');
+      if (btnSaveTemplate) {
+        btnSaveTemplate.addEventListener('click', saveAsTemplate);
+      }
+      _loadCustomTemplates().then(_refreshTemplateSelect);
     }
     load();
   }
 
-  return { init, load, getAll, getById, onChange, edit, remove, exportGantt, addStateRow, removeStateRow, addCauseRow, removeCauseRow };
+  return {
+    init, load, getAll, getById, onChange, edit, remove, render, exportGantt,
+    addStateRow, removeStateRow, addCauseRow, removeCauseRow,
+    applyTemplate, saveAsTemplate, STATE_TEMPLATES,
+  };
 })();

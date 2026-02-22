@@ -13,6 +13,8 @@
 const string CONFIG_DP_SOURCES  = "KPI_Config.sources";
 const string CONFIG_DP_MACHINES = "KPI_Config.machines";
 const string CONFIG_DP_OEE      = "KPI_Config.oee";
+const string CONFIG_DP_CALENDAR = "KPI_Config.calendar";
+const string CONFIG_DP_ASSETS   = "KPI_Config.assets";
 const string CONFIG_DP_RECALC   = "KPI_Config.recalcRequest";
 
 mapping PERIOD_SECONDS;
@@ -156,10 +158,29 @@ void writeCorrectedResult(string dpName, float value, time calcTime)
   dpSetTimed(calcTime, dpName + ":_corr.._value", value);
 }
 
-// ── Load JSON config ──────────────────────────────────────────
+// ── Load JSON config (array) ─────────────────────────────────
 dyn_mapping loadJsonConfig(string dpName)
 {
   dyn_mapping result;
+  string jsonStr;
+  dpGet(dpName, jsonStr);
+  if (jsonStr == "") return result;
+
+  anytype parsed;
+  int rc = jsonDecode(jsonStr, parsed);
+  if (rc != 0)
+  {
+    DebugN("[OEE Engine] ERROR: JSON parse failed for " + dpName);
+    return result;
+  }
+  result = parsed;
+  return result;
+}
+
+// ── Load JSON config (object/mapping) ────────────────────────
+mapping loadJsonConfigObj(string dpName)
+{
+  mapping result;
   string jsonStr;
   dpGet(dpName, jsonStr);
   if (jsonStr == "") return result;
@@ -186,12 +207,184 @@ mapping findById(dyn_mapping items, string id)
   return empty;
 }
 
+// ══════════════════════════════════════════════════════════════
+// Calendar-based planned production time calculation
+// Iterates through the period day by day, checking which shifts
+// are active on each day, and sums up their durations.
+// ══════════════════════════════════════════════════════════════
+float calcPlannedTimeFromCalendar(dyn_mapping shifts, dyn_mapping exceptions,
+                                   time tStart, time tEnd)
+{
+  float plannedSeconds = 0;
+
+  // Build exception date set for quick lookup
+  mapping exceptionDates;
+  for (int e = 1; e <= dynlen(exceptions); e++)
+  {
+    string exDate = exceptions[e]["date"];
+    exceptionDates[exDate] = exceptions[e]["category"];
+  }
+
+  // Iterate day by day
+  time current = tStart;
+  while (current < tEnd)
+  {
+    // Compute day boundaries
+    time dayStart = current;
+    time dayEnd = dayStart + 86400;
+    if (dayEnd > tEnd) dayEnd = tEnd;
+
+    // Format date for exception check (YYYY-MM-DD)
+    string dateStr = formatTime("%Y-%m-%d", current);
+
+    // Check if this day is an exception (holiday, shutdown)
+    if (mappingHasKey(exceptionDates, dateStr))
+    {
+      string exCat = exceptionDates[dateStr];
+      // Overtime exceptions count as production
+      if (exCat != "OVERTIME")
+      {
+        current = current + 86400;
+        continue; // Skip this day
+      }
+    }
+
+    // Get day of week (0=Sun, 1=Mon, ..., 6=Sat)
+    int dow = getDayOfWeek(current);
+
+    // Check each shift
+    for (int s = 1; s <= dynlen(shifts); s++)
+    {
+      if (!shifts[s]["enabled"]) continue;
+      if (shifts[s]["category"] != "PRODUCTION") continue;
+
+      // Check if shift is active on this day
+      dyn_int shiftDays = shifts[s]["days"];
+      bool active = false;
+      for (int d = 1; d <= dynlen(shiftDays); d++)
+      {
+        if (shiftDays[d] == dow) { active = true; break; }
+      }
+      if (!active) continue;
+
+      // Parse shift times (HH:MM format)
+      string startStr = shifts[s]["startTime"];
+      string endStr = shifts[s]["endTime"];
+      int startH, startM, endH, endM;
+      sscanf(startStr, "%d:%d", startH, startM);
+      sscanf(endStr, "%d:%d", endH, endM);
+      int shiftStartMin = startH * 60 + startM;
+      int shiftEndMin = endH * 60 + endM;
+
+      float shiftDuration;
+      if (shiftEndMin > shiftStartMin)
+      {
+        // Normal shift (e.g. 06:00 - 14:00)
+        shiftDuration = (float)(shiftEndMin - shiftStartMin) * 60.0;
+      }
+      else
+      {
+        // Overnight shift (e.g. 22:00 - 06:00)
+        shiftDuration = (float)(1440 - shiftStartMin + shiftEndMin) * 60.0;
+      }
+
+      // Intersect with the query period (for partial first/last days)
+      // Simplified: use full shift duration if the day is within range
+      plannedSeconds += shiftDuration;
+    }
+
+    current = current + 86400;
+  }
+
+  return plannedSeconds;
+}
+
+// ── Helper: get day of week ──────────────────────────────────
+// Returns 0=Sunday, 1=Monday, ..., 6=Saturday
+int getDayOfWeek(time t)
+{
+  int y, m, d;
+  sscanf(formatTime("%Y %m %d", t), "%d %d %d", y, m, d);
+
+  // Zeller's formula for day of week
+  if (m < 3) { m += 12; y--; }
+  int dow = (d + (13*(m+1))/5 + y + y/4 - y/100 + y/400) % 7;
+  // Zeller: 0=Sat, 1=Sun, ..., 6=Fri → convert to 0=Sun, 1=Mon, ..., 6=Sat
+  dow = (dow + 6) % 7;
+  return dow;
+}
+
+// ── AVAILABILITY with pre-computed planned time ──────────────
+float calcAvailabilityWithPlanned(mapping machine, mapping oee,
+                                   time tStart, time tEnd, float totalPlanned)
+{
+  if (totalPlanned <= 0) return 1.0;
+
+  // Microstop threshold (seconds)
+  float microstopThreshold = 0;
+  if (mappingHasKey(oee, "microstopThresholdSec"))
+    microstopThreshold = (float)oee["microstopThresholdSec"];
+
+  // Get state history
+  string stateDp = machine["stateDp"];
+  dyn_dyn_anytype queryResult;
+  string query = "SELECT '_offline.._value', '_offline.._stime' FROM '" +
+                 stateDp + "' TIMERANGE(\"" +
+                 formatTime("%Y.%m.%d %H:%M:%S", tStart) + "\",\"" +
+                 formatTime("%Y.%m.%d %H:%M:%S", tEnd) + "\",1,0)";
+  dpQuery(query, queryResult);
+
+  // Build set of unplanned stop state values
+  mapping unplannedSet;
+  dyn_mapping states = machine["states"];
+  for (int i = 1; i <= dynlen(states); i++)
+  {
+    string cat = states[i]["category"];
+    bool planned = states[i]["isPlanned"];
+    if (cat == "UNPLANNED_STOP" || (cat != "PRODUCING" && !planned))
+      unplannedSet[states[i]["value"]] = true;
+  }
+
+  // Sum unplanned downtime, filtering out microstops
+  float unplannedDown = 0;
+  int count = dynlen(queryResult);
+  for (int i = 2; i <= count; i++)
+  {
+    string stateVal = (string)queryResult[i][1];
+    if (!mappingHasKey(unplannedSet, stateVal)) continue;
+
+    time t1 = (time)queryResult[i][2];
+    time t2;
+    if (i < count)
+      t2 = (time)queryResult[i+1][2];
+    else
+      t2 = tEnd;
+
+    float dt = (float)(period(t2) - period(t1));
+    if (dt < 0) dt = 0;
+
+    if (microstopThreshold > 0 && dt < microstopThreshold)
+      continue;
+
+    unplannedDown += dt;
+  }
+
+  float avail = (totalPlanned - unplannedDown) / totalPlanned;
+  if (avail < 0) avail = 0;
+  if (avail > 1) avail = 1;
+  return avail;
+}
+
 // ── Process all OEE configurations ────────────────────────────
 void processOeeCalculations()
 {
   dyn_mapping sources  = loadJsonConfig(CONFIG_DP_SOURCES);
   dyn_mapping machines = loadJsonConfig(CONFIG_DP_MACHINES);
   dyn_mapping oeeConfigs = loadJsonConfig(CONFIG_DP_OEE);
+
+  // Load calendar and asset configs for shift-based planned time
+  mapping calendarConfig = loadJsonConfigObj(CONFIG_DP_CALENDAR);
+  dyn_mapping assets = loadJsonConfig(CONFIG_DP_ASSETS);
 
   for (int i = 1; i <= dynlen(oeeConfigs); i++)
   {
@@ -211,10 +404,29 @@ void processOeeCalculations()
     time tEnd = getCurrentTime();
     time tStart = tEnd - periodSec;
 
+    // Resolve planned production time from calendar if configured
+    float totalPlanned;
+    string calMode = oee["calendarMode"];
+    if (calMode == "CALENDAR" && mappinglen(calendarConfig) > 0)
+    {
+      // Resolve calendar from asset tree
+      dyn_mapping shifts = calendarConfig["shifts"];
+      dyn_mapping exceptions = calendarConfig["exceptions"];
+      totalPlanned = calcPlannedTimeFromCalendar(shifts, exceptions, tStart, tEnd);
+      if (totalPlanned <= 0) totalPlanned = (float)periodSec; // Fallback
+    }
+    else
+    {
+      // Fixed planned hours mode (default)
+      float plannedSeconds = oee["plannedHours"] * 3600.0;
+      float periodDays = (float)periodSec / 86400.0;
+      totalPlanned = plannedSeconds * periodDays;
+    }
+
     // ────────────────────────────────
     // 1. AVAILABILITY
     // ────────────────────────────────
-    float availability = calcAvailability(machine, oee, tStart, tEnd, periodSec);
+    float availability = calcAvailabilityWithPlanned(machine, oee, tStart, tEnd, totalPlanned);
 
     // ────────────────────────────────
     // 2. PERFORMANCE
@@ -241,9 +453,6 @@ void processOeeCalculations()
     // ────────────────────────────────
     // 6. TEEP
     // ────────────────────────────────
-    float plannedSeconds = oee["plannedHours"] * 3600.0;
-    float periodDays = (float)periodSec / 86400.0;
-    float totalPlanned = plannedSeconds * periodDays;
     float loading = totalPlanned / (float)periodSec;
     if (loading > 1.0) loading = 1.0;
     float teepValue = oeeValue * loading;

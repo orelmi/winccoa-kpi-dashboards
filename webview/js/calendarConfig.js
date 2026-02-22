@@ -247,6 +247,7 @@ const CalendarConfig = (() => {
     _notifyChange();
     Utils.closeModal('modalShift');
     Utils.toast('Shift "' + data.name + '" saved', 'success');
+    if (typeof EventLog !== 'undefined') EventLog.log(editId ? 'update' : 'create', 'calendar', data.name, 'shift ' + data.startTime + '-' + data.endTime);
   }
 
   async function removeShift(id) {
@@ -257,6 +258,7 @@ const CalendarConfig = (() => {
     render();
     _notifyChange();
     Utils.toast('Shift deleted', 'info');
+    if (typeof EventLog !== 'undefined') EventLog.log('delete', 'calendar', s.name, 'shift');
   }
 
   // ── Exception CRUD ────────────────────────────────────────
@@ -307,6 +309,7 @@ const CalendarConfig = (() => {
     _notifyChange();
     Utils.closeModal('modalException');
     Utils.toast('Exception "' + data.name + '" saved', 'success');
+    if (typeof EventLog !== 'undefined') EventLog.log(editId ? 'update' : 'create', 'calendar', data.name, 'exception ' + (data.date || 'recurring'));
   }
 
   async function removeException(id) {
@@ -317,6 +320,7 @@ const CalendarConfig = (() => {
     render();
     _notifyChange();
     Utils.toast('Exception deleted', 'info');
+    if (typeof EventLog !== 'undefined') EventLog.log('delete', 'calendar', ex.name, 'exception');
   }
 
   // ── External Connector ────────────────────────────────────

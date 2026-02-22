@@ -240,6 +240,7 @@ body {
 
 .tag-enabled { background: var(--success-light); color: var(--success); }
 .tag-disabled { background: var(--danger-light); color: var(--danger); }
+.tag-warning { background: var(--warning-light); color: var(--warning); }
 
 /* ── Empty State ───────────────────────────────────────────── */
 .empty-state {
@@ -1324,6 +1325,37 @@ tr.corr-changed:hover { background: #ffecb3; }
   max-width: 300px;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ── Context filter bar ───────────────────────────────────── */
+.context-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 20px;
+  background: var(--primary-light);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--text);
+}
+.context-filter-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.context-filter-icon {
+  font-size: 16px;
+}
+
+/* ── Roll-up header ───────────────────────────────────────── */
+.rollup-header {
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--primary);
+}
+.rollup-header h3 {
+  margin: 0;
+  color: var(--primary-dark);
 }
 
 /* ── Responsive ────────────────────────────────────────────── */

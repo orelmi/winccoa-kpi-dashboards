@@ -30,7 +30,14 @@ const AggregationConfig = (() => {
     const table = document.getElementById('aggTable');
     const sources = SourceConfig.getAll();
 
-    if (_aggregations.length === 0) {
+    // Context filtering — show only items linked to active asset
+    let displayItems = _aggregations;
+    if (typeof AssetConfig !== 'undefined' && AssetConfig.getContext()) {
+      const refs = AssetConfig.getRefsForContext();
+      displayItems = _aggregations.filter(a => refs.aggregations.includes(a.id));
+    }
+
+    if (displayItems.length === 0) {
       table.style.display = 'none';
       empty.style.display = 'block';
       return;
@@ -39,7 +46,7 @@ const AggregationConfig = (() => {
     table.style.display = 'table';
     empty.style.display = 'none';
 
-    tbody.innerHTML = _aggregations.map(agg => {
+    tbody.innerHTML = displayItems.map(agg => {
       const src = sources.find(s => s.id === agg.sourceRef);
       const srcLabel = src ? src.name : '<em>unknown</em>';
       const methodLabel = Utils.METHOD_LABELS[agg.method] || agg.method;
@@ -138,6 +145,7 @@ const AggregationConfig = (() => {
     render();
     Utils.closeModal('modalAggregation');
     Utils.toast('Aggregation "' + data.name + '" saved', 'success');
+    if (typeof EventLog !== 'undefined') EventLog.log(editId ? 'update' : 'create', 'aggregations', data.name, data.method + ' / ' + data.alignment);
   }
 
   // ── Delete ──────────────────────────────────────────────────
@@ -150,6 +158,7 @@ const AggregationConfig = (() => {
     await save();
     render();
     Utils.toast('Aggregation deleted', 'info');
+    if (typeof EventLog !== 'undefined') EventLog.log('delete', 'aggregations', agg.name);
   }
 
   // ── Period type toggle ──────────────────────────────────────

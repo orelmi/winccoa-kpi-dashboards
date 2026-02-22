@@ -370,7 +370,7 @@ void _kpiNavigate(shape ws, mapping params, mapping p)
 
   // Validate: only allow known page names (no path traversal)
   dyn_string validPages = makeDynString("assets", "sources", "aggregations", "machines",
-                                         "calendar", "oee-config", "oee-analysis", "index");
+                                         "calendar", "oee-config", "oee-analysis", "event-log", "index");
   if (dynContains(validPages, page) <= 0)
   {
     DebugN("[kpiDataAccess] Invalid navigation page:", page);
