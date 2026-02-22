@@ -8,6 +8,22 @@
 2. Open `http://localhost:8080/sources.html`
 3. Data is stored in browser `localStorage`
 
+#### Loading Demo Data
+
+To test with pre-configured demo data instead of starting from scratch:
+
+1. Open `http://localhost:8080/demo-seed.html`
+2. Click **Seed Demo Data** — populates all modules with coherent data:
+   - 1 Site (Munich Factory), 2 Areas, 3 Lines, 4 Machines
+   - 12 source datapoints (water, electricity, machine states, piece counters)
+   - 4 aggregation rules (hourly/daily water, shift electricity, temperature avg)
+   - 3 machine state configs with cause tracking
+   - 3 OEE configs (cycle time, design speed, fixed ratio methods)
+   - 3 production shifts + 1 maintenance shift + 3 exception days
+   - 15 event log entries
+3. Navigate to any page to explore the data
+4. To reset, click **Clear All Data** or run `DemoSeed.clear()` in the console
+
 ### WinCC OA
 
 1. Import DP types: Para > Import > `dplist/kpi_dptypes.dpl`

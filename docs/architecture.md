@@ -50,6 +50,7 @@ webview/
 ├── oee-config.html         # OEE configuration page
 ├── oee-analysis.html       # Live OEE analysis page
 ├── event-log.html          # Event log / audit trail page
+├── demo-seed.html          # Demo data seeder (optional, simulation mode)
 ├── css/style.css           # Industrial theme (Siemens-inspired)
 └── js/
     ├── kpi.js              # Domain-oriented data access + mock mode
@@ -63,7 +64,8 @@ webview/
     ├── oeeConfig.js        # OEE configuration (supports calendar mode)
     ├── oeeAnalysis.js      # Real-time OEE analysis + roll-up
     ├── eventLog.js         # Event log / audit trail
-    └── correctionManager.js # Archive data correction
+    ├── correctionManager.js # Archive data correction
+    └── demoSeed.js         # Demo data seeder (optional)
 
 scripts/libs/
 ├── kpiDataAccess.ctl       # CTRL data access layer (command dispatch)

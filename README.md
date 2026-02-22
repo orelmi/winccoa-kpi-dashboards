@@ -24,6 +24,7 @@ Inspired by Siemens Performance Insight (Industrial Edge).
 - **KPI Roll-Up** — Weighted-average OEE across all machines in an asset context (line/area/site level), with per-machine breakdown
 - **Machine State Templates** — Predefined templates (Standard 6-State, Simple 3-State, Packaging 8-State, CNC 7-State) plus custom user-saved templates
 - **Event Log / Audit Trail** — Tracks all configuration changes (create, update, delete) with timestamp, module, and details
+- **Demo Data Seeder** — Optional script to populate localStorage with a coherent set of demo data for testing all modules
 
 ### Not Yet Implemented
 
@@ -43,6 +44,16 @@ python3 -m http.server 8080 --directory webview
 ```
 
 Data is stored in `localStorage`. Simulation mode activates automatically when `oaJsApi` is not detected.
+
+#### Loading Demo Data
+
+To quickly populate all pages with coherent demo data:
+
+1. Open `http://localhost:8080/demo-seed.html`
+2. Click **Seed Demo Data**
+3. Navigate to any page — data is pre-loaded (1 site, 3 lines, 12 sources, 3 OEE configs, shifts, etc.)
+
+To reset: click **Clear All Data** on the same page, or call `DemoSeed.clear()` in the browser console.
 
 ### WinCC OA Integration
 
@@ -68,6 +79,7 @@ The panel accepts a `$startPage` parameter to load a specific page directly (e.g
 | OEE Config | `oee-config.html` | OEE calculation configuration |
 | OEE Analysis | `oee-analysis.html` | Live OEE analysis dashboard |
 | Event Log | `event-log.html` | Audit trail of all configuration changes |
+| Demo Seed | `demo-seed.html` | Populate localStorage with demo data (optional) |
 
 Each page is self-contained and can be loaded independently into any WinCC OA WebView panel.
 Navigation between pages is handled by the CTRL panel script (`loadSnippet`).
