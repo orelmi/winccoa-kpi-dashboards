@@ -574,11 +574,331 @@ input[type="color"] {
   to { transform: translateX(0); opacity: 1; }
 }
 
+/* ── Sub-tabs (OEE Config vs Analysis) ─────────────────────── */
+.sub-tab-nav {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 16px;
+  background: var(--border-light);
+  border-radius: var(--radius);
+  padding: 3px;
+  width: fit-content;
+}
+
+.sub-tab-btn {
+  padding: 7px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-muted);
+  transition: all var(--transition);
+}
+
+.sub-tab-btn:hover { color: var(--text); }
+
+.sub-tab-btn.active {
+  background: var(--bg-card);
+  color: var(--primary);
+  font-weight: 600;
+  box-shadow: var(--shadow);
+}
+
+.sub-tab-pane { display: none; }
+.sub-tab-pane.active { display: block; }
+
+/* ── Analysis View ─────────────────────────────────────────── */
+.analysis-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 10px;
+  background: #e8d5f5;
+  color: #6f42c1;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.analysis-intro {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  background: var(--primary-light);
+  border-left: 3px solid var(--primary);
+  border-radius: 0 var(--radius) var(--radius) 0;
+}
+
+.analysis-toolbar {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 20px;
+}
+
+.analysis-toolbar .form-group { flex: 0 0 auto; min-width: 160px; }
+
+.analysis-toolbar .form-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  margin-bottom: 4px;
+  display: block;
+}
+
+.analysis-toolbar select,
+.analysis-toolbar input[type="datetime-local"] {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  background: #fff;
+}
+
+.analysis-toolbar select:focus,
+.analysis-toolbar input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(0,153,153,0.15);
+}
+
+.form-group-row {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 10px;
+}
+
+.form-group-row > div { display: flex; flex-direction: column; }
+
+.form-group-btn {
+  flex: 0 0 auto !important;
+  min-width: auto !important;
+  justify-content: flex-end;
+}
+
+.analysis-empty {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+/* ── Analysis sections ─────────────────────────────────────── */
+.analysis-section {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+  margin-bottom: 16px;
+}
+
+.analysis-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.analysis-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+/* ── OEE Gauges (SVG donuts) ───────────────────────────────── */
+.oee-gauges {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.oee-gauge { text-align: center; }
+
+.gauge-svg {
+  width: 120px;
+  height: 120px;
+}
+
+.gauge-value {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.gauge-label {
+  font-size: 7px;
+  font-weight: 600;
+  fill: #6b7c8e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.oee-time-breakdown {
+  display: flex;
+  gap: 24px;
+  justify-content: center;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.oee-time-breakdown strong {
+  color: var(--text);
+}
+
+/* ── Timeline bar (state distribution) ─────────────────────── */
+.timeline-bar {
+  display: flex;
+  height: 32px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin: 12px 0 8px;
+}
+
+.timeline-segment {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2px;
+  transition: opacity var(--transition);
+}
+
+.timeline-segment span {
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
+}
+
+.timeline-segment:hover { opacity: 0.8; }
+
+.timeline-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.timeline-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ── Stat bars (in state table) ────────────────────────────── */
+.analysis-table td { vertical-align: middle; }
+
+.stat-bar-bg {
+  width: 100%;
+  height: 14px;
+  background: var(--border-light);
+  border-radius: 7px;
+  overflow: hidden;
+  min-width: 80px;
+}
+
+.stat-bar-fill {
+  height: 100%;
+  border-radius: 7px;
+  transition: width 0.4s ease;
+}
+
+.stat-pct {
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+  min-width: 50px;
+}
+
+.stat-count {
+  text-align: center;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ── Pareto chart (horizontal bars) ────────────────────────── */
+.pareto-chart { margin-top: 8px; }
+
+.pareto-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.pareto-row:last-child { border-bottom: none; }
+
+.pareto-label {
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+}
+
+.pareto-cause {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.pareto-cat {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.pareto-bar-container {
+  flex: 1;
+  height: 18px;
+  background: var(--border-light);
+  border-radius: 9px;
+  overflow: hidden;
+}
+
+.pareto-bar {
+  height: 100%;
+  border-radius: 9px;
+  transition: width 0.4s ease;
+}
+
+.pareto-values {
+  flex: 0 0 100px;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.pareto-duration {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pareto-count {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 /* ── Responsive ────────────────────────────────────────────── */
 @media (max-width: 768px) {
   .form-row { flex-direction: column; gap: 10px; }
   .oee-factors { grid-template-columns: repeat(2, 1fr); }
+  .oee-gauges { grid-template-columns: repeat(2, 1fr); }
   .tab-btn { padding: 10px 12px; font-size: 13px; }
   .modal { width: 95vw; }
   .modal-wide { width: 95vw; }
+  .analysis-toolbar { flex-direction: column; }
+  .pareto-label { flex: 0 0 120px; }
+  .pareto-values { flex: 0 0 80px; }
 }

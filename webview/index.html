@@ -106,14 +106,77 @@
     <!-- TAB: OEE                                               -->
     <!-- ═══════════════════════════════════════════════════════ -->
     <section id="tab-oee" class="tab-pane">
-      <div class="pane-toolbar">
-        <h2>OEE Configuration</h2>
-        <button class="btn btn-primary" id="btnAddOee">+ Add OEE Line</button>
+      <!-- Sub-tabs: Config vs Analysis -->
+      <div class="sub-tab-nav">
+        <button class="sub-tab-btn active" data-subtab="oeeConfig">Configuration</button>
+        <button class="sub-tab-btn" data-subtab="oeeAnalysis">Live Analysis</button>
       </div>
 
-      <div id="oeeList"></div>
-      <div class="empty-state" id="oeeEmpty">
-        <p>No OEE configurations. Click <strong>+ Add OEE Line</strong> to configure Overall Equipment Effectiveness.</p>
+      <!-- ── OEE Config sub-tab ──────────────────────────────── -->
+      <div id="subtab-oeeConfig" class="sub-tab-pane active">
+        <div class="pane-toolbar">
+          <h2>OEE Configuration</h2>
+          <button class="btn btn-primary" id="btnAddOee">+ Add OEE Line</button>
+        </div>
+        <div id="oeeList"></div>
+        <div class="empty-state" id="oeeEmpty">
+          <p>No OEE configurations. Click <strong>+ Add OEE Line</strong> to configure Overall Equipment Effectiveness.</p>
+        </div>
+      </div>
+
+      <!-- ── OEE Analysis sub-tab ────────────────────────────── -->
+      <div id="subtab-oeeAnalysis" class="sub-tab-pane">
+        <div class="pane-toolbar">
+          <h2>Live Analysis</h2>
+          <span class="analysis-badge">Display-time aggregation</span>
+        </div>
+        <p class="analysis-intro">
+          Aggregates raw archive data on the fly for the selected visualization period.
+          Unlike pre-calculated KPIs (historized by the CTRL engine), this view
+          recomputes from source data each time you change the period.
+        </p>
+
+        <!-- Period selector -->
+        <div class="analysis-toolbar">
+          <div class="form-group">
+            <label for="analysisMachineSelect">Machine</label>
+            <select id="analysisMachineSelect">
+              <option value="">-- Select Machine --</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="analysisPreset">Period</label>
+            <select id="analysisPreset">
+              <option value="LAST_1H">Last 1 hour</option>
+              <option value="LAST_8H" selected>Last 8 hours (shift)</option>
+              <option value="LAST_24H">Last 24 hours</option>
+              <option value="TODAY">Today</option>
+              <option value="THIS_WEEK">This week</option>
+              <option value="THIS_MONTH">This month</option>
+              <option value="LAST_7D">Last 7 days</option>
+              <option value="LAST_30D">Last 30 days</option>
+              <option value="CUSTOM">Custom range...</option>
+            </select>
+          </div>
+          <div class="form-group form-group-row" id="analysisCustomRange" style="display:none;">
+            <div>
+              <label for="analysisStart">From</label>
+              <input type="datetime-local" id="analysisStart">
+            </div>
+            <div>
+              <label for="analysisEnd">To</label>
+              <input type="datetime-local" id="analysisEnd">
+            </div>
+          </div>
+          <div class="form-group form-group-btn">
+            <button class="btn btn-primary" id="btnAnalysisRefresh">Refresh</button>
+          </div>
+        </div>
+
+        <!-- Analysis results (rendered by oeeAnalysis.js) -->
+        <div id="analysisResults">
+          <div class="analysis-empty">Select a machine and click <strong>Refresh</strong> to view analysis.</div>
+        </div>
       </div>
     </section>
   </main>
@@ -589,6 +652,7 @@
   <script src="js/aggregationConfig.js"></script>
   <script src="js/machineStateConfig.js"></script>
   <script src="js/oeeConfig.js"></script>
+  <script src="js/oeeAnalysis.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════
    app.js — Main entry point
-   Tab routing, DP browser, initialization
+   Tab routing, sub-tab routing, DP browser, initialization
    ═══════════════════════════════════════════════════════════════ */
 
 const App = (() => {
@@ -20,6 +20,23 @@ const App = (() => {
         btn.classList.add('active');
         const tabId = btn.getAttribute('data-tab');
         document.getElementById('tab-' + tabId).classList.add('active');
+      });
+    });
+
+    // Sub-tabs (within the OEE tab)
+    document.querySelectorAll('.sub-tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const parent = btn.closest('.tab-pane');
+        parent.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
+        parent.querySelectorAll('.sub-tab-pane').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        const subId = btn.getAttribute('data-subtab');
+        document.getElementById('subtab-' + subId).classList.add('active');
+
+        // Refresh analysis selects when switching to analysis tab
+        if (subId === 'oeeAnalysis') {
+          OeeAnalysis.refreshMachineSelect();
+        }
       });
     });
   }
@@ -129,6 +146,9 @@ const App = (() => {
     AggregationConfig.init();
     MachineStateConfig.init();
     OeeConfig.init();
+
+    // Initialize display-time analysis module
+    OeeAnalysis.init();
 
     console.log('[App] KPI Configuration initialized (' + mode + ' mode)');
   }
