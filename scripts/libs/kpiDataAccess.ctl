@@ -369,7 +369,7 @@ void _kpiNavigate(shape ws, mapping params, mapping p)
   string page = p["page"];
 
   // Validate: only allow known page names (no path traversal)
-  dyn_string validPages = makeDynString("sources", "aggregations", "machines",
+  dyn_string validPages = makeDynString("assets", "sources", "aggregations", "machines",
                                          "calendar", "oee-config", "oee-analysis", "index");
   if (dynContains(validPages, page) <= 0)
   {

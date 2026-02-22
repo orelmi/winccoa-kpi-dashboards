@@ -42,6 +42,7 @@ In simulation mode, all calls are handled by a mock layer using `localStorage`.
 ```
 webview/
 ├── index.html              # Landing page (redirects to sources.html)
+├── assets.html             # Asset hierarchy / organization page
 ├── sources.html            # Source configuration page
 ├── aggregations.html       # KPI aggregation page
 ├── machines.html           # Machine state configuration page
@@ -52,7 +53,8 @@ webview/
 └── js/
     ├── kpi.js              # Domain-oriented data access + mock mode
     ├── utils.js            # Helpers, constants, formatting
-    ├── nav.js              # Shared page navigation
+    ├── nav.js              # Shared page navigation + context badge
+    ├── assetConfig.js      # Asset tree + context provider (self-contained)
     ├── sourceConfig.js     # Source datapoint configuration
     ├── aggregationConfig.js # KPI aggregation configuration
     ├── machineStateConfig.js # Machine state configuration
@@ -78,6 +80,23 @@ Each HTML page is self-contained and can be loaded independently into any WinCC 
 - **Simulation mode:** Browser `window.location.href` redirect.
 
 Modules are safe for data-only loading — `render()` and `init()` check for DOM elements before binding events or updating the UI. This allows dependent modules (e.g., SourceConfig on the OEE page) to load their data without having their UI present.
+
+## Asset Context
+
+The `AssetConfig` module is **self-contained** and provides an organizational context to the application:
+
+```
+AssetConfig (self-contained)           Other modules (consumers)
+─────────────────────────────          ─────────────────────────
+Tree: SITE > AREA > LINE > MACHINE
+Context: setContext(id) / getContext()  →  getRefsForContext() → filter
+Calendar: resolveCalendar(id)          →  walk up tree for inheritance
+Refs: machines[], sources[], oee[]     →  link configs to assets
+```
+
+**Key design principle:** AssetConfig does NOT import or depend on other modules. Other modules optionally query the context API to filter their data. This keeps the asset module portable — it can be loaded alone or alongside any subset of modules.
+
+**Context persistence:** The current asset context is stored in `localStorage` so it survives page navigation (each `loadSnippet` reloads the entire page).
 
 ## CTRL Commands
 

@@ -7,6 +7,7 @@ Inspired by Siemens Performance Insight (Industrial Edge).
 
 ### Implemented
 
+- **Asset Organization** — Hierarchical plant structure (Site > Area > Line > Machine) with context-based filtering, calendar inheritance, and configuration linking
 - **Source Configuration** — Register WinCC OA datapoints with type, characterization, archiving, and validity limits
 - **KPI Aggregation** — 10 aggregation methods (Sum, Avg, Min, Max, Delta, Time-Weighted Avg, Flow Rate, Uptime Ratio, StdDev, Count) with calendar-aligned or sliding periods
 - **Machine State Configuration** — Define machine states with OEE categories, colors, and downtime cause tracking (hierarchical cause tree)
@@ -26,7 +27,7 @@ Inspired by Siemens Performance Insight (Industrial Edge).
 - Histogram / Boxplot Widgets (statistical distribution)
 - Report Generation (scheduled Excel/CSV/PDF with email)
 - Post-Production Reason Editing (reclassify causes after the fact)
-- Multi-Asset Aggregation (plant-level roll-up KPIs)
+- Multi-Asset Aggregation (plant-level roll-up KPI calculations)
 
 ## Quick Start
 
@@ -55,6 +56,7 @@ The panel accepts a `$startPage` parameter to load a specific page directly (e.g
 
 | Page | File | Description |
 |------|------|-------------|
+| Assets | `assets.html` | Plant hierarchy, context selection, link configs |
 | Sources | `sources.html` | Source datapoint configuration |
 | Aggregations | `aggregations.html` | KPI aggregation rules |
 | Machine States | `machines.html` | Machine state definitions + cause tracking |

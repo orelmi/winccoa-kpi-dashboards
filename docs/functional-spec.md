@@ -1,5 +1,33 @@
 # Functional Specification
 
+## 0. Asset Organization
+
+Hierarchical plant structure for organizing all configurations:
+
+| Level | Type | Example |
+|-------|------|---------|
+| 0 | SITE | Factory Munich |
+| 1 | AREA | Building A |
+| 2 | LINE | Packaging Line 1 |
+| 3 | MACHINE | Labeler |
+
+### Features
+- **Tree CRUD**: Add, edit, remove assets at any level. Removing a parent removes all descendants.
+- **Reference linking**: Each asset links to machines, sources, aggregations, and OEE configs via a reference modal. The asset module does not modify other configs — it only stores references.
+- **Context selection**: Click an asset name to set it as the active context. The context is persisted in `localStorage` across page navigation. A breadcrumb badge in the header shows the current context.
+- **Calendar inheritance**: Each asset can assign a calendar at its level, or inherit from its parent by walking up the tree.
+- **Context API**: Other modules call `AssetConfig.getContext()` and `AssetConfig.getRefsForContext()` to filter their data by the active asset and its descendants.
+
+### Allowed Children
+
+| Parent Type | Allowed Children |
+|-------------|-----------------|
+| (root) | SITE |
+| SITE | AREA, LINE |
+| AREA | LINE, MACHINE |
+| LINE | MACHINE |
+| MACHINE | (none) |
+
 ## 1. Source Configuration
 
 Source datapoint registration with metadata:

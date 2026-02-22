@@ -20,6 +20,7 @@
 Use the navigation bar at the top to switch between pages. In WinCC OA, you can also load pages directly using the `$startPage` panel parameter:
 
 ```
+$startPage:assets         → Asset organization / hierarchy
 $startPage:sources        → Source configuration
 $startPage:aggregations   → KPI aggregation rules
 $startPage:machines       → Machine state definitions
@@ -27,6 +28,15 @@ $startPage:calendar       → Production calendar / shifts
 $startPage:oee-config     → OEE configuration
 $startPage:oee-analysis   → Live OEE analysis
 ```
+
+## Organizing Assets
+
+1. Navigate to **Assets**
+2. Click **+ Add Site** to create a root site
+3. Use the **+** button on any asset to add child assets (Area, Line, Machine)
+4. Click the **link icon** to open the reference modal and link machines, sources, aggregations, OEE configs
+5. Click an asset **name** to set it as the active context — other pages will filter by this context
+6. Assign a calendar at any level (children inherit unless they have their own)
 
 ## Configuring Sources
 

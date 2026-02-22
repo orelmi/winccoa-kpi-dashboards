@@ -1,6 +1,6 @@
 /* ═══════════════════════════════════════════════════════════════
-   nav.js — Shared page navigation
-   Renders the header and navigation bar on each page.
+   nav.js — Shared page navigation + asset context breadcrumb
+   Renders the header, navigation bar, and context indicator.
    Navigation is handled by CTRL (loadSnippet) in live mode,
    or by browser location change in simulation mode.
    ═══════════════════════════════════════════════════════════════ */
@@ -9,6 +9,7 @@ const Nav = (() => {
   'use strict';
 
   const PAGES = [
+    { id: 'assets',        label: 'Assets',         icon: '&#127970;' },
     { id: 'sources',       label: 'Sources',        icon: '&#9881;' },
     { id: 'aggregations',  label: 'Aggregations',   icon: '&#931;' },
     { id: 'machines',      label: 'Machine States',  icon: '&#9208;' },
@@ -27,6 +28,7 @@ const Nav = (() => {
           '<span class="app-subtitle">WinCC OA Performance Manager</span>' +
         '</div>' +
         '<div class="header-right">' +
+          '<span id="navContextBadge" class="nav-context-badge" style="display:none;"></span>' +
           '<span id="connectionStatus" class="status-badge status-mock">SIMULATION MODE</span>' +
         '</div>';
     }
@@ -41,6 +43,37 @@ const Nav = (() => {
         '</button>';
       }).join('');
     }
+
+    // ── Asset context badge (shows current asset in header) ──
+    _refreshContextBadge();
+  }
+
+  function _refreshContextBadge() {
+    const badge = document.getElementById('navContextBadge');
+    if (!badge) return;
+    // AssetConfig may not be loaded on all pages
+    if (typeof AssetConfig === 'undefined') {
+      // Read from localStorage directly
+      const ctxId = localStorage.getItem('kpi_asset_context');
+      if (ctxId) {
+        badge.style.display = 'inline-block';
+        badge.textContent = 'Asset: ' + ctxId;
+        badge.title = 'Asset context active (load AssetConfig for full info)';
+      }
+      return;
+    }
+    const ctx = AssetConfig.getContext();
+    if (!ctx) {
+      badge.style.display = 'none';
+      return;
+    }
+    const path = AssetConfig.getContextPath();
+    const label = path.map(a => a.name).join(' > ');
+    badge.style.display = 'inline-block';
+    badge.innerHTML = label;
+    badge.title = 'Current asset context — click Assets page to change';
+    badge.style.cursor = 'pointer';
+    badge.onclick = function() { KPI.navigate('assets'); };
   }
 
   function updateConnectionStatus(mode) {

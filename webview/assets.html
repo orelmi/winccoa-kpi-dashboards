@@ -1,0 +1,173 @@
+<!-- WinCC OA KPI — Asset Organization
+     Loaded via loadSnippet() in WebView EWO or standalone in browser. -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="css/style.css">
+
+  <header class="app-header" id="appHeader"></header>
+  <nav class="tab-nav" id="appNav"></nav>
+
+  <main class="tab-content">
+    <div class="pane-toolbar">
+      <h2>Asset Organization</h2>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-secondary" id="btnClearContext" style="display:none;" onclick="AssetConfig.setContext(null);this.style.display='none';AssetConfig.render();">Clear context</button>
+        <button class="btn btn-primary" id="btnAddAssetRoot">+ Add Site</button>
+      </div>
+    </div>
+
+    <p class="analysis-intro">
+      Organize your plant hierarchy: <strong>Site &gt; Area &gt; Line &gt; Machine</strong>.
+      Link machines, sources, aggregations, and OEE configurations to each asset.
+      Select an asset to set the active context — other pages filter accordingly.
+    </p>
+
+    <!-- Context breadcrumb -->
+    <div id="assetContextBar" class="asset-context-bar" style="display:none;">
+      <span class="asset-context-label">Context:</span>
+      <span id="assetContextBreadcrumb"></span>
+    </div>
+
+    <!-- Tree view -->
+    <div id="assetTree" class="asset-tree"></div>
+    <div class="empty-state" id="assetEmpty">
+      <p>No assets defined. Click <strong>+ Add Site</strong> to start building your plant hierarchy.</p>
+    </div>
+  </main>
+
+  <!-- MODAL: Asset Add/Edit -->
+  <div class="modal-overlay" id="modalAsset">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modalAssetTitle">Add Asset</h3>
+        <button class="modal-close" data-close="modalAsset">&times;</button>
+      </div>
+      <form id="formAsset" class="modal-body">
+        <input type="hidden" id="assetEditId">
+        <input type="hidden" id="assetParentId">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="assetName">Name</label>
+            <input type="text" id="assetName" required placeholder="e.g. Packaging Line 1">
+          </div>
+          <div class="form-group">
+            <label for="assetType">Type</label>
+            <select id="assetType">
+              <option value="SITE">Site</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="assetCalendarRef">Calendar</label>
+            <select id="assetCalendarRef">
+              <option value="">(inherit from parent)</option>
+              <option value="__assigned__">Assign calendar to this level</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="modalAsset">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Asset</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Link References -->
+  <div class="modal-overlay" id="modalLinkRefs">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h3>Link Configurations — <span id="linkAssetName"></span></h3>
+        <button class="modal-close" data-close="modalLinkRefs">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="form-hint" style="margin-bottom:14px;">
+          Select which machines, sources, aggregations, and OEE configurations belong to this asset.
+        </p>
+
+        <fieldset class="form-fieldset">
+          <legend>Machines</legend>
+          <div id="linkMachines"></div>
+        </fieldset>
+
+        <fieldset class="form-fieldset">
+          <legend>Sources</legend>
+          <div id="linkSources"></div>
+        </fieldset>
+
+        <fieldset class="form-fieldset">
+          <legend>Aggregations</legend>
+          <div id="linkAggregations"></div>
+        </fieldset>
+
+        <fieldset class="form-fieldset">
+          <legend>OEE Configurations</legend>
+          <div id="linkOeeConfigs"></div>
+        </fieldset>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="modalLinkRefs">Cancel</button>
+          <button type="button" class="btn btn-primary" id="btnSaveLinkRefs">Save References</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Scripts: load all config modules so link modal can list available items -->
+  <script src="js/kpi.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/sourceConfig.js"></script>
+  <script src="js/aggregationConfig.js"></script>
+  <script src="js/machineStateConfig.js"></script>
+  <script src="js/calendarConfig.js"></script>
+  <script src="js/oeeConfig.js"></script>
+  <script src="js/assetConfig.js"></script>
+  <script>
+    (function() {
+      var mode = KPI.init();
+      Nav.render('assets');
+      Nav.updateConnectionStatus(mode);
+      Utils.initModalCloseButtons();
+      // Load data-only modules (their DOM isn't on this page)
+      SourceConfig.init();
+      AggregationConfig.init();
+      MachineStateConfig.init();
+      CalendarConfig.init();
+      OeeConfig.init();
+      // Full init for asset module
+      AssetConfig.init();
+
+      // Update context bar on context change
+      AssetConfig.onContextChange(function(ctxId) {
+        _updateContextBar();
+        AssetConfig.render();
+      });
+      // Initial context bar
+      setTimeout(_updateContextBar, 200);
+
+      function _updateContextBar() {
+        var bar = document.getElementById('assetContextBar');
+        var crumb = document.getElementById('assetContextBreadcrumb');
+        var btnClear = document.getElementById('btnClearContext');
+        var ctx = AssetConfig.getContext();
+        if (!ctx) {
+          bar.style.display = 'none';
+          btnClear.style.display = 'none';
+          return;
+        }
+        bar.style.display = 'flex';
+        btnClear.style.display = 'inline-flex';
+        var path = AssetConfig.getContextPath();
+        crumb.innerHTML = path.map(function(a, i) {
+          var isLast = i === path.length - 1;
+          var cls = isLast ? 'asset-crumb active' : 'asset-crumb';
+          return '<span class="' + cls + '" onclick="AssetConfig.setContext(\'' + a.id + '\')">' +
+            Utils.escapeHtml(a.name) + '</span>';
+        }).join('<span class="asset-crumb-sep">&rsaquo;</span>');
+      }
+    })();
+  </script>
