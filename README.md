@@ -385,3 +385,27 @@ KPI.unsubscribe(handle);
 JavaScript never touches WinCC OA attribute paths, SQL syntax, or DP naming conventions. The CTRL layer is the single source of truth for all WinCC OA integration details.
 
 In simulation mode, all calls are handled by a mock layer using `localStorage`.
+
+---
+
+## Not Yet Implemented
+
+The following features from [Siemens Performance Insight](https://docs.industrial-operations-x.siemens.cloud/r/en-us/v1.19/performance-insight) are **not yet implemented** and are candidates for future development:
+
+| Feature | Description | PI Reference |
+|---------|-------------|--------------|
+| **Shift Calendar** | Configurable shift definitions (start/end times, days of week) used to automatically assign time categories (Shift 1/2/3, weekend, holiday). Enables shift-based OEE aggregation and reporting. | Time Model / Shift Configuration |
+| **Custom KPI Formulas** | User-defined formula builder allowing operators (+, -, ×, ÷, min, max) and operands (other KPIs, constants, counters) to create composite KPIs beyond the predefined aggregation methods. | Custom KPI Configuration |
+| **Step Time Analysis** | Sequence/batch step duration analysis — tracks execution time of individual production steps within a cycle, identifies bottleneck steps, and compares actual vs. target step times. | Step Analysis |
+| **Histogram / Boxplot Widgets** | Statistical distribution visualization for KPI values (histograms, box-and-whisker plots, Cpk/Cp process capability indices). Useful for quality analysis and process variability monitoring. | Statistical Widgets |
+| **Report Generation** | Scheduled report generation in Excel/CSV/PDF format with configurable content (KPI summaries, OEE trends, downtime analysis). Optional email delivery on schedule or threshold violation. | Report Configuration |
+| **Post-Production Reason Editing** | Allows operators to reassign or annotate downtime causes after the fact (e.g., reclassify an "Unknown Stop" as "Material Shortage"). Includes approval workflow and audit trail. | Reason Assignment |
+| **Multi-Asset Aggregation** | Plant-level and line-level KPI aggregation across multiple machines/assets. Hierarchical asset tree with roll-up calculations (weighted OEE, total availability, aggregated MTBF/MTTR). | Asset Hierarchy / Plant KPIs |
+
+### Partially Implemented
+
+| Feature | Current State | Remaining Work |
+|---------|---------------|----------------|
+| **Microstop Filtering** | Duration-based threshold filtering implemented | Add automatic microstop pattern detection and categorization |
+| **Hierarchical Cause Tree** | Parent-child cause relationships with indented Pareto | Add drag-and-drop tree editing, multi-level depth beyond 2 |
+| **CSV Export** | State analysis, cause analysis, OEE summary export | Add scheduled/automated export and Excel (XLSX) format |
