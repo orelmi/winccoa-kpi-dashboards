@@ -113,6 +113,14 @@ const Utils = (() => {
     OTHER: 'Other',
   };
 
+  // ── Format duration (seconds) for display ──────────────────
+  function formatDuration(sec) {
+    if (sec == null) return '--';
+    if (sec >= 3600) return (sec / 3600).toFixed(1) + 'h';
+    if (sec >= 60) return (sec / 60).toFixed(0) + 'min';
+    return sec.toFixed(0) + 's';
+  }
+
   // ── HTML escaping ───────────────────────────────────────────
   function escapeHtml(str) {
     if (!str) return '';
@@ -169,6 +177,7 @@ const Utils = (() => {
     initModalCloseButtons,
     characterizationTag,
     escapeHtml,
+    formatDuration,
     formatPeriod,
     populateSourceSelect,
     populateMachineSelect,

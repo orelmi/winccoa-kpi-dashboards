@@ -1353,13 +1353,13 @@ const OeeAnalysis = (() => {
       '</div>';
 
     html += '<div class="oee-gauges">';
-    html += _gaugeHtml('OEE', avgOee, null);
-    html += _gaugeHtml('Availability', avgA, null);
-    html += _gaugeHtml('Performance', avgP, null);
-    html += _gaugeHtml('Quality', avgQ, null);
+    html += _gauge('Availability', avgA, '#17a2b8', null, null);
+    html += _gauge('Performance', avgP, '#6f42c1', null, null);
+    html += _gauge('Quality', avgQ, '#28a745', null, null);
+    html += _gauge('OEE', avgOee, '#009999', null, null);
     html += '</div>';
 
-    html += '<div class="kpi-cards">';
+    html += '<div class="kpi-other-row">';
     html += _kpiCard('TEEP', fmtPct(avgTeep), 'Weighted avg across machines', '');
     html += _kpiCard('MTBF', fmtSec(aggMtbf), totalFailures + ' total failures', '');
     html += _kpiCard('MTTR', fmtSec(aggMttr), '', '');

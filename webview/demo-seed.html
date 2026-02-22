@@ -1,0 +1,69 @@
+<!-- WinCC OA KPI — Demo Data Seeder
+     Open this page in the browser to populate localStorage with coherent demo data.
+     After seeding, navigate to any other page to see the data. -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="css/style.css">
+
+  <header class="app-header" id="appHeader">
+    <div>
+      <span class="app-title">WinCC OA KPI Dashboards</span>
+      <span class="app-subtitle">Demo Data Seeder</span>
+    </div>
+  </header>
+
+  <main class="tab-content">
+    <div style="max-width:600px;margin:40px auto;text-align:center;">
+      <h2 style="margin-bottom:16px;">Demo Data Setup</h2>
+      <p class="analysis-intro" style="text-align:left;">
+        This page populates <code>localStorage</code> with a coherent set of demo data
+        covering all configuration modules. After seeding, navigate to any page to see
+        the data in action.
+      </p>
+
+      <div style="margin:24px 0;">
+        <h3 style="margin-bottom:12px;">Demo data includes:</h3>
+        <table class="config-table" style="margin:0 auto;width:auto;">
+          <tbody>
+            <tr><td><strong>Assets</strong></td><td>1 Site, 2 Areas, 3 Lines, 4 Machines</td></tr>
+            <tr><td><strong>Sources</strong></td><td>12 datapoints (counters, states, process values)</td></tr>
+            <tr><td><strong>Aggregations</strong></td><td>4 KPI aggregations (hourly, daily, shift)</td></tr>
+            <tr><td><strong>Machines</strong></td><td>3 machine state configs (8, 7, and 5 states)</td></tr>
+            <tr><td><strong>Calendar</strong></td><td>3 production shifts + 1 maintenance + 3 exceptions</td></tr>
+            <tr><td><strong>OEE</strong></td><td>3 OEE configs (cycle time, design speed, calendar mode)</td></tr>
+            <tr><td><strong>Event Log</strong></td><td>15 sample audit trail entries</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="display:flex;gap:16px;justify-content:center;margin-top:32px;">
+        <button class="btn btn-primary" style="padding:12px 32px;font-size:15px;" onclick="DemoSeed.seed()">
+          Seed Demo Data
+        </button>
+        <button class="btn btn-danger" style="padding:12px 32px;font-size:15px;" onclick="DemoSeed.clear()">
+          Clear All Data
+        </button>
+      </div>
+
+      <p style="margin-top:32px;color:var(--text-muted);font-size:13px;">
+        After seeding, open any page:
+        <a href="assets.html">Assets</a> |
+        <a href="sources.html">Sources</a> |
+        <a href="aggregations.html">Aggregations</a> |
+        <a href="machines.html">Machines</a> |
+        <a href="calendar.html">Calendar</a> |
+        <a href="oee-config.html">OEE Config</a> |
+        <a href="oee-analysis.html">OEE Analysis</a> |
+        <a href="event-log.html">Event Log</a>
+      </p>
+    </div>
+  </main>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="js/kpi.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/demoSeed.js"></script>
+  <script>
+    KPI.init();
+  </script>
