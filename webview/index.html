@@ -128,6 +128,13 @@
           <h2>Live Analysis</h2>
           <span class="analysis-badge">Display-time aggregation</span>
         </div>
+
+        <!-- Analysis view sub-tabs -->
+        <div class="analysis-view-nav">
+          <button class="analysis-view-btn active" data-view="overview">Overview</button>
+          <button class="analysis-view-btn" data-view="timeCompare">Time Comparison</button>
+        </div>
+
         <p class="analysis-intro">
           Aggregates raw archive data on the fly for the selected visualization period.
           Unlike pre-calculated KPIs (historized by the CTRL engine), this view
@@ -171,9 +178,18 @@
           </div>
         </div>
 
-        <!-- Analysis results (rendered by oeeAnalysis.js) -->
-        <div id="analysisResults">
-          <div class="analysis-empty">Select a machine and click <strong>Refresh</strong> to view analysis.</div>
+        <!-- Overview results (rendered by oeeAnalysis.js) -->
+        <div id="analysisViewOverview" class="analysis-view active">
+          <div id="analysisResults">
+            <div class="analysis-empty">Select a machine and click <strong>Refresh</strong> to view analysis.</div>
+          </div>
+        </div>
+
+        <!-- Time comparison results -->
+        <div id="analysisViewTimeCompare" class="analysis-view">
+          <div id="timeCompareResults">
+            <div class="analysis-empty">Select a machine and click <strong>Refresh</strong> to view time comparison.</div>
+          </div>
         </div>
       </div>
     </section>
@@ -605,6 +621,73 @@
               <label class="checkbox-label">
                 <input type="checkbox" id="oeeEnabled" checked> Enabled
               </label>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="form-fieldset">
+          <legend>KPI Limits / Thresholds</legend>
+          <p class="form-hint">Define warning and alarm thresholds for KPI values.
+            Warning triggers at the first threshold, alarm at the second.
+            Leave empty for no threshold.</p>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeeLimitOeeWarn">OEE Warning (%)</label>
+              <input type="number" id="oeeLimitOeeWarn" step="0.1" min="0" max="100" placeholder="e.g. 65">
+            </div>
+            <div class="form-group">
+              <label for="oeeLimitOeeAlarm">OEE Alarm (%)</label>
+              <input type="number" id="oeeLimitOeeAlarm" step="0.1" min="0" max="100" placeholder="e.g. 50">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeeLimitAvailWarn">Availability Warning (%)</label>
+              <input type="number" id="oeeLimitAvailWarn" step="0.1" min="0" max="100" placeholder="e.g. 90">
+            </div>
+            <div class="form-group">
+              <label for="oeeLimitAvailAlarm">Availability Alarm (%)</label>
+              <input type="number" id="oeeLimitAvailAlarm" step="0.1" min="0" max="100" placeholder="e.g. 80">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeeLimitPerfWarn">Performance Warning (%)</label>
+              <input type="number" id="oeeLimitPerfWarn" step="0.1" min="0" max="100" placeholder="e.g. 85">
+            </div>
+            <div class="form-group">
+              <label for="oeeLimitPerfAlarm">Performance Alarm (%)</label>
+              <input type="number" id="oeeLimitPerfAlarm" step="0.1" min="0" max="100" placeholder="e.g. 70">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeeLimitQualWarn">Quality Warning (%)</label>
+              <input type="number" id="oeeLimitQualWarn" step="0.1" min="0" max="100" placeholder="e.g. 95">
+            </div>
+            <div class="form-group">
+              <label for="oeeLimitQualAlarm">Quality Alarm (%)</label>
+              <input type="number" id="oeeLimitQualAlarm" step="0.1" min="0" max="100" placeholder="e.g. 90">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeeLimitMtbfWarn">MTBF Warning (seconds)</label>
+              <input type="number" id="oeeLimitMtbfWarn" step="1" min="0" placeholder="e.g. 7200">
+            </div>
+            <div class="form-group">
+              <label for="oeeLimitMtbfAlarm">MTBF Alarm (seconds)</label>
+              <input type="number" id="oeeLimitMtbfAlarm" step="1" min="0" placeholder="e.g. 3600">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeeLimitMttrWarn">MTTR Warning (seconds)</label>
+              <input type="number" id="oeeLimitMttrWarn" step="1" min="0" placeholder="e.g. 1800">
+            </div>
+            <div class="form-group">
+              <label for="oeeLimitMttrAlarm">MTTR Alarm (seconds)</label>
+              <input type="number" id="oeeLimitMttrAlarm" step="1" min="0" placeholder="e.g. 3600">
             </div>
           </div>
         </fieldset>

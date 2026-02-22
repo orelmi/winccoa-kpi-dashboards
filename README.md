@@ -161,26 +161,56 @@ Machine state configuration for OEE analysis and downtime tracking:
 
 ### OEE Tab
 
-OEE (Overall Equipment Effectiveness) calculation configuration:
+OEE (Overall Equipment Effectiveness) calculation configuration, inspired by [Siemens Performance Insight](https://docs.industrial-operations-x.siemens.cloud/r/en-us/v1.19/performance-insight):
 
 ```
 OEE = Availability x Performance x Quality
+TEEP = OEE x (Planned Production Time / Calendar Time)
+MTBF = Total Uptime / Number of Failures
+MTTR = Total Repair Time / Number of Failures
 ```
 
-| Factor | Formula | Sources |
-|--------|---------|---------|
+| KPI | Formula | Sources |
+|-----|---------|---------|
 | **Availability** | (Planned Time - Unplanned Stops) / Planned Time | From machine states |
 | **Performance** | (Ideal Cycle Time x Total Pieces) / Run Time | Piece counter + ideal cycle time or design speed |
 | **Quality** | Good Pieces / Total Pieces | Good piece counter, reject counter, or fixed ratio |
+| **OEE** | Availability x Performance x Quality | Composite |
+| **TEEP** | OEE x Loading (planned/calendar) | OEE + planned hours |
+| **MTBF** | Uptime between failures / failure count | From machine states (unplanned stops) |
+| **MTTR** | Repair time / failure count | From machine states (unplanned stops) |
+
+**KPI Limits / Thresholds:**
+
+Each OEE configuration can define warning and alarm thresholds for OEE, Availability, Performance, Quality, MTBF, and MTTR. When thresholds are violated, visual indicators (color changes, warning icons) are shown in the analysis gauges.
 
 **Results written to DPs:**
 - `<prefix>.Availability` (%)
 - `<prefix>.Performance` (%)
 - `<prefix>.Quality` (%)
 - `<prefix>.OEE` (%)
+- `<prefix>.TEEP` (%)
+- `<prefix>.MTBF` (seconds)
+- `<prefix>.MTTR` (seconds)
+- `<prefix>.FailureCount` (count)
 - `<prefix>.StateTime.<state>` (seconds per state)
 - `<prefix>.Causes.<cause>.Count` (stop count)
 - `<prefix>.Causes.<cause>.Duration` (duration in seconds)
+
+### Live Analysis Views
+
+The OEE tab includes a **Live Analysis** sub-tab with display-time aggregation:
+
+| View | Description |
+|------|-------------|
+| **Overview** | OEE gauges (with limits coloring + previous period delta), TEEP/MTBF/MTTR cards, Gantt chart, time model breakdown, state distribution, state table, cause Pareto |
+| **Time Comparison** | Side-by-side OEE/MTBF/MTTR for yesterday, last 7 days, last 30 days |
+
+**Gantt Chart:** SVG timeline showing each state transition as a colored segment. Hover for details (state name, duration, timestamps).
+
+**Time Model (ISO 22400):** Hierarchical breakdown showing Calendar Time → Planned Production / Planned Downtime → Net Production / Unplanned Downtime.
+
+**Previous Period Reference:** Each OEE gauge shows the delta (in percentage points) compared to the equivalent previous period.
 
 ---
 
@@ -219,6 +249,10 @@ OEE result:
 | Performance | float (%) |
 | Quality | float (%) |
 | OEE | float (%) |
+| TEEP | float (%) |
+| MTBF | float (seconds) |
+| MTTR | float (seconds) |
+| FailureCount | int |
 | StateTime | dyn_float |
 | lastCalc | time |
 

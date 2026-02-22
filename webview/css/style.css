@@ -890,6 +890,236 @@ input[type="color"] {
   color: var(--text-muted);
 }
 
+/* ── Analysis View Navigation ─────────────────────────────── */
+.analysis-view-nav {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 12px;
+  background: var(--border-light);
+  border-radius: var(--radius);
+  padding: 3px;
+  width: fit-content;
+}
+
+.analysis-view-btn {
+  padding: 6px 16px;
+  font-size: 12px;
+  font-weight: 500;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--text-muted);
+  transition: all var(--transition);
+}
+
+.analysis-view-btn:hover { color: var(--text); }
+
+.analysis-view-btn.active {
+  background: var(--bg-card);
+  color: var(--primary);
+  font-weight: 600;
+  box-shadow: var(--shadow);
+}
+
+.analysis-view { display: none; }
+.analysis-view.active { display: block; }
+
+/* ── Time Comparison View ─────────────────────────────────── */
+.time-compare-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.time-compare-col {
+  background: var(--bg-card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+
+.time-compare-col h4 {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  text-align: center;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--primary);
+}
+
+.tc-kpi-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.tc-kpi-row:last-child { border-bottom: none; }
+
+.tc-kpi-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.tc-kpi-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+@media (max-width: 768px) {
+  .time-compare-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Gauge Delta (previous period reference) ──────────────── */
+.gauge-delta {
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  margin-top: 2px;
+}
+.delta-positive { color: var(--success); }
+.delta-negative { color: var(--danger); }
+
+/* ── Other KPIs row (TEEP, MTBF, MTTR) ───────────────────── */
+.kpi-other-row {
+  display: flex;
+  gap: 12px;
+  margin: 16px 0 8px;
+}
+
+.kpi-other-card {
+  flex: 1;
+  text-align: center;
+  padding: 12px 16px;
+  background: var(--bg);
+  border-radius: var(--radius);
+  border: 2px solid transparent;
+}
+
+.kpi-other-card.limit-ok { border-color: var(--success); }
+.kpi-other-card.limit-warn { border-color: var(--warning); background: var(--warning-light); }
+.kpi-other-card.limit-alarm { border-color: var(--danger); background: var(--danger-light); }
+
+.kpi-other-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+
+.kpi-other-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.kpi-other-hint {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+/* ── Gantt Chart ──────────────────────────────────────────── */
+.gantt-container {
+  margin: 12px 0;
+}
+
+.gantt-bar {
+  position: relative;
+  height: 32px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: var(--border-light);
+}
+
+.gantt-segment {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  min-width: 1px;
+  cursor: pointer;
+  transition: opacity var(--transition);
+  border-right: 1px solid rgba(255,255,255,0.3);
+}
+
+.gantt-segment:hover {
+  opacity: 0.75;
+  z-index: 1;
+  outline: 2px solid var(--text);
+}
+
+.gantt-axis {
+  position: relative;
+  height: 20px;
+  margin-top: 4px;
+}
+
+.gantt-time-label {
+  position: absolute;
+  font-size: 10px;
+  color: var(--text-muted);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+/* ── Time Model Breakdown ─────────────────────────────────── */
+.time-model {
+  margin: 12px 0;
+}
+
+.tm-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 0;
+}
+
+.tm-level-0 .tm-label { font-weight: 700; }
+.tm-level-1 { padding-left: 20px; }
+.tm-level-2 { padding-left: 40px; }
+
+.tm-label {
+  flex: 0 0 160px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.tm-bar-full {
+  flex: 1;
+  height: 16px;
+  background: var(--border-light);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tm-bar-seg {
+  height: 100%;
+  border-radius: 8px;
+  transition: width 0.4s ease;
+}
+
+.tm-value {
+  flex: 0 0 180px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: right;
+}
+
+.tm-value small {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
 /* ── Correction Manager ────────────────────────────────────── */
 .corr-info {
   padding: 12px 16px;

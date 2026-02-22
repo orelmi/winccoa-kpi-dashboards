@@ -102,6 +102,19 @@ void onRecalcRequest(string dp, string jsonStr)
     float quality      = calcQuality(oee, sources, tStart, tEnd);
     float oeeValue     = availability * performance * quality;
 
+    // MTBF / MTTR
+    float mtbf, mttr;
+    int failureCount;
+    calcMtbfMttr(machine, tStart, tEnd, mtbf, mttr, failureCount);
+
+    // TEEP
+    float plannedSeconds = oee["plannedHours"] * 3600.0;
+    float periodDays = (float)periodSec / 86400.0;
+    float totalPlanned = plannedSeconds * periodDays;
+    float loading = totalPlanned / (float)periodSec;
+    if (loading > 1.0) loading = 1.0;
+    float teepValue = oeeValue * loading;
+
     // Write corrected results via dpSetTimed to _corr
     string prefix = oee["targetDp"];
     if (prefix == "") prefix = "KPI_OEE." + oee["name"];
@@ -111,13 +124,18 @@ void onRecalcRequest(string dp, string jsonStr)
     writeCorrectedResult(prefix + ".Performance",  performance * 100, calcTime);
     writeCorrectedResult(prefix + ".Quality",      quality * 100, calcTime);
     writeCorrectedResult(prefix + ".OEE",          oeeValue * 100, calcTime);
+    writeCorrectedResult(prefix + ".TEEP",         teepValue * 100, calcTime);
+    writeCorrectedResult(prefix + ".MTBF",         mtbf, calcTime);
+    writeCorrectedResult(prefix + ".MTTR",         mttr, calcTime);
 
     DebugN("[OEE Engine] Recalc: " + oee["name"] +
            " A=" + (availability*100) +
            "% P=" + (performance*100) +
            "% Q=" + (quality*100) +
            "% OEE=" + (oeeValue*100) +
-           "% (written to _corr at " + calcTime + ")");
+           "% TEEP=" + (teepValue*100) +
+           "% MTBF=" + mtbf + "s MTTR=" + mttr +
+           "s (written to _corr at " + calcTime + ")");
   }
 
   DebugN("[OEE Engine] Recalculation complete");
@@ -213,6 +231,23 @@ void processOeeCalculations()
     // ────────────────────────────────
     float oeeValue = availability * performance * quality;
 
+    // ────────────────────────────────
+    // 5. MTBF / MTTR
+    // ────────────────────────────────
+    float mtbf, mttr;
+    int failureCount;
+    calcMtbfMttr(machine, tStart, tEnd, mtbf, mttr, failureCount);
+
+    // ────────────────────────────────
+    // 6. TEEP
+    // ────────────────────────────────
+    float plannedSeconds = oee["plannedHours"] * 3600.0;
+    float periodDays = (float)periodSec / 86400.0;
+    float totalPlanned = plannedSeconds * periodDays;
+    float loading = totalPlanned / (float)periodSec;
+    if (loading > 1.0) loading = 1.0;
+    float teepValue = oeeValue * loading;
+
     // ── Write results ─────────────
     string prefix = oee["targetDp"];
     if (prefix == "") prefix = "KPI_OEE." + oee["name"];
@@ -221,12 +256,19 @@ void processOeeCalculations()
     writeResult(prefix + ".Performance",  performance * 100);
     writeResult(prefix + ".Quality",      quality * 100);
     writeResult(prefix + ".OEE",          oeeValue * 100);
+    writeResult(prefix + ".TEEP",         teepValue * 100);
+    writeResult(prefix + ".MTBF",         mtbf);
+    writeResult(prefix + ".MTTR",         mttr);
+    writeResult(prefix + ".FailureCount", failureCount);
 
     DebugN("[OEE Engine] " + oee["name"] +
            " A=" + (availability*100) +
            "% P=" + (performance*100) +
            "% Q=" + (quality*100) +
-           "% OEE=" + (oeeValue*100) + "%");
+           "% OEE=" + (oeeValue*100) +
+           "% TEEP=" + (teepValue*100) +
+           "% MTBF=" + mtbf +
+           "s MTTR=" + mttr + "s");
 
     // ── Downtime analysis ─────────
     computeDowntimeAnalysis(machine, prefix, tStart, tEnd);
@@ -391,6 +433,84 @@ mapping calcTimePerState(mapping machine, time tStart, time tEnd)
   }
 
   return result;
+}
+
+// ── MTBF / MTTR Calculation ───────────────────────────────────
+// MTBF = sum of uptime between failures / number of failures
+// MTTR = total repair time / number of failures
+void calcMtbfMttr(mapping machine, time tStart, time tEnd,
+                   float &mtbf, float &mttr, int &failureCount)
+{
+  mtbf = 0;
+  mttr = 0;
+  failureCount = 0;
+
+  string stateDp = machine["stateDp"];
+  dyn_mapping states = machine["states"];
+
+  // Build set of unplanned stop values
+  mapping unplannedSet;
+  for (int i = 1; i <= dynlen(states); i++)
+  {
+    string cat = states[i]["category"];
+    bool planned = states[i]["isPlanned"];
+    if (cat == "UNPLANNED_STOP" || (cat != "PRODUCING" && cat != "IDLE" && !planned))
+      unplannedSet[states[i]["value"]] = true;
+  }
+
+  // Query state history
+  dyn_dyn_anytype queryResult;
+  string query = "SELECT '_offline.._value', '_offline.._stime' FROM '" +
+                 stateDp + "' TIMERANGE(\"" +
+                 formatTime("%Y.%m.%d %H:%M:%S", tStart) + "\",\"" +
+                 formatTime("%Y.%m.%d %H:%M:%S", tEnd) + "\",1,0)";
+
+  dpQuery(query, queryResult);
+
+  int count = dynlen(queryResult) - 1;
+  if (count <= 0) return;
+
+  float totalUptime = 0;
+  float totalRepairTime = 0;
+  bool inFailure = false;
+
+  for (int i = 2; i <= dynlen(queryResult); i++)
+  {
+    string stateVal = (string)queryResult[i][1];
+    time t1 = (time)queryResult[i][2];
+    time t2;
+
+    if (i < dynlen(queryResult))
+      t2 = (time)queryResult[i+1][2];
+    else
+      t2 = tEnd;
+
+    float dt = (float)(period(t2) - period(t1));
+    if (dt < 0) dt = 0;
+
+    bool isFail = mappingHasKey(unplannedSet, stateVal);
+
+    if (isFail)
+    {
+      if (!inFailure)
+      {
+        failureCount++;
+        inFailure = true;
+      }
+      totalRepairTime += dt;
+    }
+    else
+    {
+      inFailure = false;
+      totalUptime += dt;
+    }
+  }
+
+  if (failureCount > 0)
+  {
+    mtbf = totalUptime / (float)failureCount;
+    mttr = totalRepairTime / (float)failureCount;
+  }
 }
 
 // ── Get counter delta over a period ───────────────────────────

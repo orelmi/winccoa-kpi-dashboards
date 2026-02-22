@@ -188,6 +188,24 @@ const OeeConfig = (() => {
     document.getElementById('oeeTargetDp').value = oee.targetDp || '';
     document.getElementById('oeeEnabled').checked = oee.enabled !== false;
 
+    // Populate limit fields
+    const lim = oee.limits || {};
+    const setLimit = (id, val) => {
+      document.getElementById(id).value = val != null ? val : '';
+    };
+    setLimit('oeeLimitOeeWarn', lim.oeeWarn);
+    setLimit('oeeLimitOeeAlarm', lim.oeeAlarm);
+    setLimit('oeeLimitAvailWarn', lim.availabilityWarn);
+    setLimit('oeeLimitAvailAlarm', lim.availabilityAlarm);
+    setLimit('oeeLimitPerfWarn', lim.performanceWarn);
+    setLimit('oeeLimitPerfAlarm', lim.performanceAlarm);
+    setLimit('oeeLimitQualWarn', lim.qualityWarn);
+    setLimit('oeeLimitQualAlarm', lim.qualityAlarm);
+    setLimit('oeeLimitMtbfWarn', lim.mtbfWarn);
+    setLimit('oeeLimitMtbfAlarm', lim.mtbfAlarm);
+    setLimit('oeeLimitMttrWarn', lim.mttrWarn);
+    setLimit('oeeLimitMttrAlarm', lim.mttrAlarm);
+
     _refreshSelects(oee);
     _onPerfMethodChange();
     _onQualityMethodChange();
@@ -202,6 +220,11 @@ const OeeConfig = (() => {
     const editId = document.getElementById('oeeEditId').value;
     const perfMethod = document.getElementById('oeePerfMethod').value;
     const qualityMethod = document.getElementById('oeeQualityMethod').value;
+
+    const parseLimit = (id) => {
+      const v = document.getElementById(id).value;
+      return v !== '' ? parseFloat(v) : null;
+    };
 
     const data = {
       id: editId || Utils.generateId(),
@@ -230,6 +253,20 @@ const OeeConfig = (() => {
       period: document.getElementById('oeePeriod').value,
       targetDp: document.getElementById('oeeTargetDp').value.trim() || null,
       enabled: document.getElementById('oeeEnabled').checked,
+      limits: {
+        oeeWarn: parseLimit('oeeLimitOeeWarn'),
+        oeeAlarm: parseLimit('oeeLimitOeeAlarm'),
+        availabilityWarn: parseLimit('oeeLimitAvailWarn'),
+        availabilityAlarm: parseLimit('oeeLimitAvailAlarm'),
+        performanceWarn: parseLimit('oeeLimitPerfWarn'),
+        performanceAlarm: parseLimit('oeeLimitPerfAlarm'),
+        qualityWarn: parseLimit('oeeLimitQualWarn'),
+        qualityAlarm: parseLimit('oeeLimitQualAlarm'),
+        mtbfWarn: parseLimit('oeeLimitMtbfWarn'),
+        mtbfAlarm: parseLimit('oeeLimitMtbfAlarm'),
+        mttrWarn: parseLimit('oeeLimitMttrWarn'),
+        mttrAlarm: parseLimit('oeeLimitMttrAlarm'),
+      },
     };
 
     // Auto-generate target DP prefix
