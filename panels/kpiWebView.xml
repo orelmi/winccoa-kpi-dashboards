@@ -40,7 +40,11 @@ main()
   // Load the KPI Configuration HTML via loadSnippet.
   // This injects the oaJsApi library into the page.
   // Path is relative to the WinCC OA web server root (data/ directory).
-  this.loadSnippet("/webview/index.html");
+  // Default page: sources. Can be overridden by panel $-parameter "startPage".
+  string startPage = "sources";
+  if (isDollarDefined("$startPage"))
+    startPage = getDollarValue("$startPage");
+  this.loadSnippet("/webview/" + startPage + ".html");
 }
         ]]>
       </script>

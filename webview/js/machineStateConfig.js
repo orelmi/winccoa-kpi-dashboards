@@ -52,6 +52,7 @@ const MachineStateConfig = (() => {
   // ── Render machine list ─────────────────────────────────────
   function render() {
     const container = document.getElementById('machineList');
+    if (!container) return; // Data-only mode: no DOM on this page
     const empty = document.getElementById('machineEmpty');
 
     if (_machines.length === 0) {
@@ -328,12 +329,14 @@ const MachineStateConfig = (() => {
 
   // ── Init ────────────────────────────────────────────────────
   function init() {
-    document.getElementById('btnAddMachine').addEventListener('click', openAdd);
-    document.getElementById('formMachine').addEventListener('submit', saveFromForm);
-    document.getElementById('btnAddStateDef').addEventListener('click', addStateRow);
-    document.getElementById('btnAddCauseDef').addEventListener('click', addCauseRow);
-    document.getElementById('machTrackCauses').addEventListener('change', _onTrackCausesChange);
-
+    const btn = document.getElementById('btnAddMachine');
+    if (btn) {
+      btn.addEventListener('click', openAdd);
+      document.getElementById('formMachine').addEventListener('submit', saveFromForm);
+      document.getElementById('btnAddStateDef').addEventListener('click', addStateRow);
+      document.getElementById('btnAddCauseDef').addEventListener('click', addCauseRow);
+      document.getElementById('machTrackCauses').addEventListener('change', _onTrackCausesChange);
+    }
     load();
   }
 

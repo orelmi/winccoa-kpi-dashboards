@@ -436,6 +436,23 @@ const KPI = (() => {
     };
   }
 
+  // ═══════════════════════════════════════════════════════════
+  // Page navigation — CTRL-based routing
+  //
+  // In live mode: sends a 'navigate' command to CTRL,
+  // which calls loadSnippet() on the WebView to load the
+  // requested page.
+  // In simulation mode: uses window.location for browser nav.
+  // ═══════════════════════════════════════════════════════════
+
+  function navigate(page) {
+    if (_mode === 'live') {
+      _toCtrl({ cmd: 'navigate', page: page });
+    } else {
+      window.location.href = page + '.html';
+    }
+  }
+
   // ── Public API ──────────────────────────────────────────────
   return {
     init,
@@ -472,5 +489,8 @@ const KPI = (() => {
     buildGanttMapping,
     exportGanttMapping,
     buildDashboardGanttConfig,
+
+    // Navigation
+    navigate,
   };
 })();

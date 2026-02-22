@@ -1,0 +1,312 @@
+<!-- WinCC OA KPI — Sources Configuration
+     Loaded via loadSnippet() in WebView EWO or standalone in browser. -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="css/style.css">
+
+  <header class="app-header" id="appHeader"></header>
+  <nav class="tab-nav" id="appNav"></nav>
+
+  <main class="tab-content">
+    <div class="pane-toolbar">
+      <h2>Source Datapoints</h2>
+      <button class="btn btn-primary" id="btnAddSource">+ Add Source</button>
+    </div>
+    <table class="config-table" id="sourceTable">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Datapoint</th>
+          <th>Type</th>
+          <th>Characterization</th>
+          <th>Unit</th>
+          <th>Archiving</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="sourceTableBody"></tbody>
+    </table>
+    <div class="empty-state" id="sourceEmpty">
+      <p>No sources configured yet. Click <strong>+ Add Source</strong> to begin.</p>
+    </div>
+  </main>
+
+  <!-- MODAL: Source Configuration -->
+  <div class="modal-overlay" id="modalSource">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modalSourceTitle">Add Source</h3>
+        <button class="modal-close" data-close="modalSource">&times;</button>
+      </div>
+      <form id="formSource" class="modal-body">
+        <input type="hidden" id="srcEditId">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="srcName">Name</label>
+            <input type="text" id="srcName" required placeholder="e.g. Water Counter Bldg A">
+          </div>
+          <div class="form-group">
+            <label for="srcDp">Source Datapoint</label>
+            <div class="dp-selector">
+              <input type="text" id="srcDp" required placeholder="System1:Plant.Sensor.value">
+              <button type="button" class="btn btn-sm" id="btnBrowseDp">Browse</button>
+            </div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="srcDataType">Data Type</label>
+            <select id="srcDataType">
+              <option value="FLOAT">FLOAT</option>
+              <option value="INT">INT</option>
+              <option value="BOOL">BOOL</option>
+              <option value="STRING">STRING</option>
+              <option value="UINT">UINT</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="srcCharacterization">Characterization</label>
+            <select id="srcCharacterization">
+              <option value="PROCESS_VALUE">Process Value</option>
+              <option value="COUNTER">Counter</option>
+              <option value="FLOW_RATE">Flow Rate</option>
+              <option value="STATUS">Status (ON/OFF)</option>
+              <option value="SETPOINT">Setpoint</option>
+              <option value="ENERGY">Energy Meter</option>
+              <option value="MACHINE_STATE">Machine State</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="srcUnit">Unit</label>
+            <input type="text" id="srcUnit" placeholder="e.g. m3/h, kW, degC">
+          </div>
+        </div>
+        <fieldset class="form-fieldset">
+          <legend>Archiving</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="srcArchEnabled" checked> Enable Archiving
+              </label>
+            </div>
+            <div class="form-group">
+              <label for="srcArchClass">Archive Class</label>
+              <select id="srcArchClass">
+                <option value="_EVENT">Event-driven</option>
+                <option value="_1s">1 second</option>
+                <option value="_5s">5 seconds</option>
+                <option value="_10s">10 seconds</option>
+                <option value="_30s">30 seconds</option>
+                <option value="_1min">1 minute</option>
+                <option value="_5min">5 minutes</option>
+                <option value="_15min">15 minutes</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="srcSmoothMode">Smoothing</label>
+              <select id="srcSmoothMode">
+                <option value="NONE">None</option>
+                <option value="DEADBAND_ABS">Deadband Absolute</option>
+                <option value="DEADBAND_REL">Deadband Relative (%)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="srcSmoothValue">Smoothing Value</label>
+              <input type="number" id="srcSmoothValue" value="0" step="0.01" min="0">
+            </div>
+          </div>
+        </fieldset>
+        <fieldset class="form-fieldset">
+          <legend>Validity Limits</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="srcMinValid">Min Valid</label>
+              <input type="number" id="srcMinValid" step="any" placeholder="No limit">
+            </div>
+            <div class="form-group">
+              <label for="srcMaxValid">Max Valid</label>
+              <input type="number" id="srcMaxValid" step="any" placeholder="No limit">
+            </div>
+          </div>
+        </fieldset>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="modalSource">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Source</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Data Correction -->
+  <div class="modal-overlay" id="modalCorrection">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h3>Data Correction</h3>
+        <button class="modal-close" data-close="modalCorrection">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="corr-info">
+          <p>Source: <strong id="corrSourceName"></strong></p>
+          <p>Datapoint: <code id="corrDpName"></code></p>
+          <p class="form-hint">
+            Corrections are written via <code>dpSetTimed</code> to <code>_corr.._value</code>.
+            Archive queries on <code>_offline.._value</code> will then return the corrected value
+            instead of the original.
+          </p>
+        </div>
+        <fieldset class="form-fieldset">
+          <legend>Archive History</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="corrStart">From</label>
+              <input type="datetime-local" id="corrStart">
+            </div>
+            <div class="form-group">
+              <label for="corrEnd">To</label>
+              <input type="datetime-local" id="corrEnd">
+            </div>
+            <div class="form-group form-group-btn">
+              <button type="button" class="btn btn-secondary" id="btnCorrLoadHistory">Load</button>
+            </div>
+          </div>
+          <div class="corr-history-wrap">
+            <table class="config-table compact">
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Original</th>
+                  <th>Correction</th>
+                  <th>Effective (_offline)</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="corrHistoryBody">
+                <tr><td colspan="5" class="text-muted" style="text-align:center;">Load a period to view archive data.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </fieldset>
+        <fieldset class="form-fieldset">
+          <legend>Apply Correction</legend>
+          <p class="form-hint">
+            Write a corrected value at a specific timestamp.
+            Uses <code>dpSetTimed(time, dp:_corr.._value, value)</code>.
+          </p>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="corrSingleTime">Timestamp</label>
+              <input type="datetime-local" id="corrSingleTime">
+            </div>
+            <div class="form-group">
+              <label for="corrSingleValue">Corrected Value</label>
+              <input type="number" id="corrSingleValue" step="any" placeholder="New value">
+            </div>
+            <div class="form-group form-group-btn">
+              <button type="button" class="btn btn-primary" id="btnCorrApply">Apply Correction</button>
+            </div>
+          </div>
+        </fieldset>
+        <fieldset class="form-fieldset">
+          <legend>KPI Recalculation</legend>
+          <p class="form-hint">
+            After correcting source values, trigger KPI recalculation for the affected period.
+            The engine will re-read via <code>_offline</code> (returns corrected values) and write
+            the recalculated KPI results into <code>_corr.._value</code> of the target DPs.
+          </p>
+          <button type="button" class="btn btn-secondary" id="btnCorrRecalc">Recalculate KPIs for this period</button>
+          <div id="corrRecalcStatus" style="margin-top:10px;"></div>
+        </fieldset>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="modalCorrection">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: DP Browser -->
+  <div class="modal-overlay" id="modalDpBrowser">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Datapoint Browser</h3>
+        <button class="modal-close" data-close="modalDpBrowser">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="dpBrowserFilter">Filter</label>
+          <input type="text" id="dpBrowserFilter" placeholder="Type to filter datapoints...">
+        </div>
+        <div class="dp-tree" id="dpBrowserTree"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="modalDpBrowser">Cancel</button>
+          <button type="button" class="btn btn-primary" id="btnDpBrowserSelect">Select</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Scripts -->
+  <script src="js/kpi.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/sourceConfig.js"></script>
+  <script src="js/correctionManager.js"></script>
+  <script>
+    (function() {
+      const mode = KPI.init();
+      Nav.render('sources');
+      Nav.updateConnectionStatus(mode);
+      Utils.initModalCloseButtons();
+
+      // DP Browser
+      var _dpBrowserCallback = null, _selectedDp = null;
+      document.getElementById('btnBrowseDp').addEventListener('click', function() {
+        _dpBrowserCallback = function(dp) { document.getElementById('srcDp').value = dp; };
+        _selectedDp = null;
+        document.getElementById('dpBrowserFilter').value = '';
+        _loadDpTree('');
+        Utils.openModal('modalDpBrowser');
+      });
+      document.getElementById('dpBrowserFilter').addEventListener('input', function() {
+        _loadDpTree(this.value);
+      });
+      document.getElementById('btnDpBrowserSelect').addEventListener('click', function() {
+        if (_selectedDp && _dpBrowserCallback) {
+          _dpBrowserCallback(_selectedDp);
+          Utils.closeModal('modalDpBrowser');
+        }
+      });
+      async function _loadDpTree(filter) {
+        var tree = document.getElementById('dpBrowserTree');
+        tree.innerHTML = '<p style="color:#6b7c8e;padding:8px;">Loading...</p>';
+        try {
+          var dps = await KPI.browseDatapoints(filter);
+          if (dps.length === 0) { tree.innerHTML = '<p style="color:#6b7c8e;padding:8px;">No datapoints found.</p>'; return; }
+          tree.innerHTML = dps.map(function(dp) {
+            return '<div class="dp-item" data-dp="' + Utils.escapeHtml(dp) + '">' + Utils.escapeHtml(dp) + '</div>';
+          }).join('');
+          tree.querySelectorAll('.dp-item').forEach(function(item) {
+            item.addEventListener('click', function() {
+              tree.querySelectorAll('.dp-item').forEach(function(i) { i.classList.remove('selected'); });
+              item.classList.add('selected');
+              _selectedDp = item.getAttribute('data-dp');
+            });
+            item.addEventListener('dblclick', function() {
+              _selectedDp = item.getAttribute('data-dp');
+              if (_dpBrowserCallback) { _dpBrowserCallback(_selectedDp); Utils.closeModal('modalDpBrowser'); }
+            });
+          });
+        } catch (err) {
+          tree.innerHTML = '<p style="color:#d9363e;padding:8px;">Error: ' + err.message + '</p>';
+        }
+      }
+
+      SourceConfig.init();
+      CorrectionManager.init();
+    })();
+  </script>

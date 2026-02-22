@@ -196,12 +196,11 @@ const CorrectionManager = (() => {
     statusEl.innerHTML = '<span class="text-muted">Recalculating KPIs...</span>';
 
     try {
-      // Find all aggregations that reference this source
-      const aggregations = AggregationConfig.getAll();
+      // Load configs directly (page may not have all modules loaded)
+      const aggregations = (await KPI.loadConfig('aggregations')) || [];
       const affectedAggs = aggregations.filter(a => a.sourceRef === _currentSourceId && a.enabled);
 
-      // Find all OEE configs that reference this source (pieces, good, reject)
-      const oeeConfigs = OeeConfig.getAll();
+      const oeeConfigs = (await KPI.loadConfig('oee')) || [];
       const affectedOees = oeeConfigs.filter(o => o.enabled && (
         o.piecesSourceRef === _currentSourceId ||
         o.goodSourceRef === _currentSourceId ||

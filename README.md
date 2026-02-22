@@ -1,411 +1,74 @@
-# WinCC OA KPI Configuration & Performance Manager
+# WinCC OA KPI Dashboards
 
-Web-based configuration for KPI calculation, OEE analysis, and downtime tracking in WinCC OA.
-Inspired by Siemens Industrial Edge (IIH + Performance Insight).
-
----
-
-## Quick Start
-
-### 1. Simulation Mode (without WinCC OA)
-
-Open directly in a browser to test the interface:
-
-```bash
-# From the project root
-open webview/index.html
-# or
-python3 -m http.server 8080 --directory webview
-# then open http://localhost:8080
-```
-
-Simulation mode is automatically enabled when `oaJsApi` is not detected. Data is persisted in `localStorage`.
-
-### 2. WinCC OA Integration
-
-#### a) Import Datapoint Types
-
-1. Open **Para** in WinCC OA
-2. **Import** > select `dplist/kpi_dptypes.dpl`
-3. Verify that the types `KPI_Config`, `KPI_Result`, and `KPI_OEE_Result` are created
-
-#### b) Enable the WinCC OA Web Server
-
-The `oaJsApi` library requires an active web server. Add a CTRL manager with parameter `webclient_http.ctl` in the Console, or drag-drop the file onto the Console.
-
-#### c) Copy files into the WinCC OA project
-
-```
-<WinCC_OA_Project>/
-├── panels/
-│   └── kpiWebView.xml        ← copy from panels/
-├── scripts/
-│   └── libs/
-│       ├── kpiDataAccess.ctl        ← copy from scripts/libs/
-│       ├── kpiAggregationEngine.ctl ← copy from scripts/libs/
-│       └── kpiOeeEngine.ctl         ← copy from scripts/libs/
-└── data/
-    └── webview/               ← copy the webview/ folder here
-        ├── index.html
-        ├── css/style.css
-        └── js/*.js
-```
-
-> **Note:** The `webview/` folder must be placed under the `data/` directory so the WinCC OA web server can serve it. The panel loads it via `loadSnippet("/webview/index.html")`.
-
-#### d) Configure CTRL managers
-
-In the WinCC OA **Console**, add two CTRL managers:
-
-| Manager | Script |
-|---------|--------|
-| CTRL Manager 1 | `scripts/libs/kpiAggregationEngine.ctl` |
-| CTRL Manager 2 | `scripts/libs/kpiOeeEngine.ctl` |
-
-#### e) Open the panel
-
-- Open `panels/kpiWebView.xml` in GEDI or the Vision module
-- The panel calls `loadSnippet("/webview/index.html")` which loads the HTML into the WebView EWO and injects the `oaJsApi` library
-- The `messageReceived` handler dispatches ALL commands to the CTRL data access layer (`kpiDataAccess.ctl`)
-
----
-
-## Architecture
-
-```
-webview/
-├── index.html            # Main page (Single Page App)
-├── css/style.css         # Industrial theme
-└── js/
-    ├── kpi.js            # Domain-oriented data access + mock mode
-    ├── utils.js          # Helpers, constants, formatting
-    ├── sourceConfig.js   # Data source configuration
-    ├── aggregationConfig.js  # KPI aggregation configuration
-    ├── machineStateConfig.js # Machine state configuration
-    ├── oeeConfig.js      # OEE configuration
-    ├── oeeAnalysis.js    # Real-time OEE analysis (display-time aggregation)
-    ├── correctionManager.js  # Archive data correction
-    └── app.js            # Entry point, tabs, DP browser
-
-scripts/libs/
-├── kpiDataAccess.ctl         # CTRL data access layer (domain commands)
-├── kpiAggregationEngine.ctl  # Aggregation calculation engine
-└── kpiOeeEngine.ctl          # OEE calculation engine + downtime analysis
-
-panels/
-└── kpiWebView.xml       # WinCC OA panel with WebView (XML format)
-
-dplist/
-└── kpi_dptypes.dpl       # DP type export
-```
-
----
+Web-based KPI/OEE configuration and analysis for Siemens WinCC OA.
+Inspired by Siemens Performance Insight (Industrial Edge).
 
 ## Features
 
-### Sources Tab
+### Implemented
 
-Source datapoint configuration:
+- **Source Configuration** — Register WinCC OA datapoints with type, characterization, archiving, and validity limits
+- **KPI Aggregation** — 10 aggregation methods (Sum, Avg, Min, Max, Delta, Time-Weighted Avg, Flow Rate, Uptime Ratio, StdDev, Count) with calendar-aligned or sliding periods
+- **Machine State Configuration** — Define machine states with OEE categories, colors, and downtime cause tracking (hierarchical cause tree)
+- **Production Calendar** — Shift schedules (days/times), exception days (holidays, shutdowns), with optional MES/ERP connectors (SAP PP, SQL Database, CSV Import, OPC UA, REST API)
+- **OEE Calculation** — Availability x Performance x Quality, with TEEP, MTBF, MTTR
+- **Live Analysis** — Display-time OEE gauges, Gantt chart, ISO 22400 time model, state distribution, cause Pareto, time comparison
+- **KPI Limits** — Warning/alarm thresholds with visual indicators for OEE, Availability, Performance, Quality, MTBF, MTTR
+- **Microstop Filtering** — Configurable duration threshold to exclude short stops from OEE availability
+- **Archive Correction** — View/correct archived values with KPI recalculation trigger
+- **CSV Export** — Download state analysis, cause analysis, OEE summary
+- **Dashboard Gantt Compatibility** — Export mapping tables for WinCC OA Dashboard Gantt Chart widget
 
-| Parameter | Description |
-|-----------|-------------|
-| **Name** | Human-readable source name |
-| **Datapoint** | WinCC OA DP path (e.g. `System1:Plant.Water.Counter`) |
-| **Data Type** | FLOAT, INT, BOOL, UINT, STRING |
-| **Characterization** | Signal type — see table below |
-| **Archiving** | Activation, archive class, smoothing (deadband) |
-| **Limits** | Min/max validity values |
+### Not Yet Implemented
 
-**Available characterizations:**
+- Custom KPI Formulas (user-defined formula builder)
+- Step Time Analysis (sequence/batch step tracking)
+- Histogram / Boxplot Widgets (statistical distribution)
+- Report Generation (scheduled Excel/CSV/PDF with email)
+- Post-Production Reason Editing (reclassify causes after the fact)
+- Multi-Asset Aggregation (plant-level roll-up KPIs)
 
-| Type | Usage |
-|------|-------|
-| Process Value | Temperature, pressure, level... |
-| Counter | Incremental counter (water, energy, pieces) |
-| Flow Rate | Instantaneous flow rate |
-| Status | Binary state ON/OFF |
-| Setpoint | Setpoint value |
-| Energy Meter | Energy counter |
-| Machine State | Machine state signal (for OEE) |
+## Quick Start
 
-### Aggregations Tab
+### Simulation Mode (no WinCC OA needed)
 
-Computed KPI configuration:
-
-| Method | Description | Typical Usage |
-|--------|-------------|---------------|
-| Sum | Sum of values | Total consumption |
-| Average | Arithmetic mean | Average temperature |
-| Min / Max | Extremes | Peak values |
-| Count | Number of samples | Event frequency |
-| Delta | First-to-last difference | Counter consumption |
-| Time-Weighted Avg | Time-weighted average | Process values |
-| Flow from Counter | Delta / period (in units/h) | Flow rate from counter |
-| Uptime Ratio | % of time in ON state | Availability |
-| Std Deviation | Standard deviation | Process variability |
-
-**Periods**: 15min, Hourly, Shift, Day, Week, Month (calendar-aligned or sliding).
-
-**Custom expression**: free-form formula using `delta`, `sum`, `avg`, `min`, `max`, `count`, `periodSeconds`.
-
-### Machine States Tab
-
-Machine state configuration for OEE analysis and downtime tracking:
-
-- Define each possible state (code + label + category)
-- Categories: Producing, Idle, Planned Stop, Unplanned Stop, Setup, Maintenance
-- Mark planned vs unplanned stops
-- Configure downtime cause tracking with categorization (Mechanical, Electrical, Process, Operator, Quality, Supply)
-
-**Default preset:** 6 states + 9 causes pre-configured, fully customizable.
-
-### OEE Tab
-
-OEE (Overall Equipment Effectiveness) calculation configuration, inspired by [Siemens Performance Insight](https://docs.industrial-operations-x.siemens.cloud/r/en-us/v1.19/performance-insight):
-
-```
-OEE = Availability x Performance x Quality
-TEEP = OEE x (Planned Production Time / Calendar Time)
-MTBF = Total Uptime / Number of Failures
-MTTR = Total Repair Time / Number of Failures
+```bash
+python3 -m http.server 8080 --directory webview
+# Open http://localhost:8080/sources.html
 ```
 
-| KPI | Formula | Sources |
-|-----|---------|---------|
-| **Availability** | (Planned Time - Unplanned Stops) / Planned Time | From machine states |
-| **Performance** | (Ideal Cycle Time x Total Pieces) / Run Time | Piece counter + ideal cycle time or design speed |
-| **Quality** | Good Pieces / Total Pieces | Good piece counter, reject counter, or fixed ratio |
-| **OEE** | Availability x Performance x Quality | Composite |
-| **TEEP** | OEE x Loading (planned/calendar) | OEE + planned hours |
-| **MTBF** | Uptime between failures / failure count | From machine states (unplanned stops) |
-| **MTTR** | Repair time / failure count | From machine states (unplanned stops) |
+Data is stored in `localStorage`. Simulation mode activates automatically when `oaJsApi` is not detected.
 
-**KPI Limits / Thresholds:**
+### WinCC OA Integration
 
-Each OEE configuration can define warning and alarm thresholds for OEE, Availability, Performance, Quality, MTBF, and MTTR. When thresholds are violated, visual indicators (color changes, warning icons) are shown in the analysis gauges.
+1. **Import DP types** — Para > Import > `dplist/kpi_dptypes.dpl`
+2. **Copy files** into your WinCC OA project:
+   - `panels/kpiWebView.xml` → `<project>/panels/`
+   - `scripts/libs/*.ctl` → `<project>/scripts/libs/`
+   - `webview/` → `<project>/data/webview/`
+3. **Start CTRL managers** for `kpiAggregationEngine.ctl` and `kpiOeeEngine.ctl`
+4. **Open** `panels/kpiWebView.xml` — the panel loads `sources.html` by default
 
-**Results written to DPs:**
-- `<prefix>.Availability` (%)
-- `<prefix>.Performance` (%)
-- `<prefix>.Quality` (%)
-- `<prefix>.OEE` (%)
-- `<prefix>.TEEP` (%)
-- `<prefix>.MTBF` (seconds)
-- `<prefix>.MTTR` (seconds)
-- `<prefix>.FailureCount` (count)
-- `<prefix>.StateTime.<state>` (seconds per state)
-- `<prefix>.Causes.<cause>.Count` (stop count)
-- `<prefix>.Causes.<cause>.Duration` (duration in seconds)
+The panel accepts a `$startPage` parameter to load a specific page directly (e.g., `$startPage:oee-analysis`).
 
-### Live Analysis Views
+## Pages
 
-The OEE tab includes a **Live Analysis** sub-tab with display-time aggregation:
+| Page | File | Description |
+|------|------|-------------|
+| Sources | `sources.html` | Source datapoint configuration |
+| Aggregations | `aggregations.html` | KPI aggregation rules |
+| Machine States | `machines.html` | Machine state definitions + cause tracking |
+| Calendar | `calendar.html` | Shift schedules + exceptions + MES/ERP connector |
+| OEE Config | `oee-config.html` | OEE calculation configuration |
+| OEE Analysis | `oee-analysis.html` | Live OEE analysis dashboard |
 
-| View | Description |
-|------|-------------|
-| **Overview** | OEE gauges (with limits coloring + previous period delta), TEEP/MTBF/MTTR cards, Gantt chart, time model breakdown, state distribution, state table, cause Pareto |
-| **Time Comparison** | Side-by-side OEE/MTBF/MTTR for yesterday, last 7 days, last 30 days |
+Each page is self-contained and can be loaded independently into any WinCC OA WebView panel.
+Navigation between pages is handled by the CTRL panel script (`loadSnippet`).
 
-**Gantt Chart:** SVG timeline showing each state transition as a colored segment. Hover for details (state name, duration, timestamps).
+## Documentation
 
-**Time Model (ISO 22400):** Hierarchical breakdown showing Calendar Time → Planned Production / Planned Downtime → Net Production / Unplanned Downtime.
+For detailed documentation, see the `docs/` folder:
 
-**Previous Period Reference:** Each OEE gauge shows the delta (in percentage points) compared to the equivalent previous period.
-
-### WinCC OA Dashboard Gantt Chart Compatibility
-
-The machine state DPs are natively compatible with the [WinCC OA Dashboard Gantt Chart widget](https://www.winccoa.com/documentation/WinCCOA/3.21/en_US/Dashboard/topics/Dashboard_ganttchart.html).
-
-**Export mapping table:** Click the chart icon on a machine card to export a Gantt mapping JSON file. This file contains:
-- A value-to-label-to-color mapping table matching the Dashboard Gantt format
-- Series configuration pointing to the machine's state DP
-- Default time range (8h) with range selector enabled
-
-**Manual Dashboard setup:**
-1. Add a Gantt Chart widget in the WinCC OA Dashboard editor
-2. Add a series pointing to the machine's state DP (e.g., `System1:Line1.MachineState`)
-3. In the mapping table, configure each value from the machine state definition:
-
-| Value | Name | Color |
-|-------|------|-------|
-| 0 | Stopped | #d9363e |
-| 1 | Producing | #28a745 |
-| 2 | Idle | #ffc107 |
-| ... | ... | ... |
-
-4. Set time range (e.g., `8h`, `1d`, `1w/w`) and enable "range selector changeable"
-
-**Supported time range shortcuts:**
-- `1d/d` — Yesterday (full day)
-- `8h` — Last 8 hours (shift)
-- `1w/w` — Last week (Mon–Sun)
-- `1M/M` — Last month
-
-The exported mapping is also stored in `KPI_Config.ganttMappings` so it can be loaded programmatically by custom Dashboard widgets or scripts.
-
----
-
-## Datapoint Types
-
-### KPI_Config
-
-Stores all configuration as JSON:
-
-| Element | Type | Content |
-|---------|------|---------|
-| sources | string | JSON array of source configs |
-| aggregations | string | JSON array of aggregation configs |
-| machines | string | JSON array of machine configs |
-| oee | string | JSON array of OEE configs |
-| recalcRequest | string | JSON recalculation request (triggers KPI/OEE recalculation) |
-| ganttMappings | string | JSON object of exported Dashboard Gantt mapping tables per machine |
-
-### KPI_Result
-
-Aggregation result:
-
-| Element | Type |
-|---------|------|
-| value | float |
-| lastCalc | time |
-| status | int (0=OK, 1=Warning, 2=Error) |
-| unit | string |
-
-### KPI_OEE_Result
-
-OEE result:
-
-| Element | Type |
-|---------|------|
-| Availability | float (%) |
-| Performance | float (%) |
-| Quality | float (%) |
-| OEE | float (%) |
-| TEEP | float (%) |
-| MTBF | float (seconds) |
-| MTTR | float (seconds) |
-| FailureCount | int |
-| StateTime | dyn_float |
-| lastCalc | time |
-
-### Archive Data Correction
-
-The system integrates the WinCC OA archive correction mechanism:
-
-| Concept | Description |
-|---------|-------------|
-| `_original.._value` | Raw archived value (written by the archiving engine) |
-| `_corr.._value` | Corrected value (written via `dpSetTimed`) |
-| `_offline.._value` | Abstraction: returns `_corr` if present, otherwise `_original` |
-
-**Correction workflow:**
-
-1. Open the correction modal from the magnifying glass button on a source
-2. Load history to view original and corrected values
-3. Apply a correction: writes via `dpSetTimed(timestamp, dp:_corr.._value, value)`
-4. Trigger KPI recalculation: the CTRL engines re-read via `_offline` (which returns corrections) and write recalculated KPI results into `_corr.._value` of the target DPs
-
-**Automatic recalculation:**
-
-- The webview writes a JSON request to `KPI_Config.recalcRequest`
-- Both CTRL engines (`kpiAggregationEngine` and `kpiOeeEngine`) monitor this DP via `dpConnect`
-- Upon receipt, they recalculate affected KPIs/OEE by re-reading via `_offline`
-- Corrected results are written via `dpSetTimed` into `_corr.._value` of the result DPs
-- Subsequent `_offline` queries on KPI DPs then return the corrected values
-
----
-
-## Data Access Architecture
-
-The interface is **domain-oriented**: JavaScript operates with KPI concepts (configs, history, corrections, recalculation), not WinCC OA primitives (dpGet, dpSet, dpQuery). All WinCC OA specifics (DP attribute paths, SQL query syntax, config DP prefix) are encapsulated in the CTRL data access layer.
-
-```
-JS (kpi.js)                         CTRL (kpiDataAccess.ctl)
-───────────                         ────────────────────────
-KPI.loadConfig("sources")
-  → toCtrl({cmd:"loadConfig"})
-    → dpGet("KPI_Config.sources", val)
-      → msgToJs(params, val)
-
-KPI.readHistory(dp, t1, t2)
-  → toCtrl({cmd:"readHistory"})
-    → dpQuery("SELECT '_offline.._value'... TIMERANGE(...)")
-      → msgToJs(params, result)
-
-KPI.writeCorrection(dp, ts, val)
-  → toCtrl({cmd:"writeCorrection"})
-    → dpSetTimed(ts, dp + ":_corr.._value", val)
-      → msgToJs(params, rc)
-```
-
-### KPI API (JavaScript)
-
-```javascript
-// Configuration
-KPI.loadConfig("sources").then(data => { ... });
-KPI.saveConfig("sources", configArray);
-
-// Datapoint browsing
-KPI.browseDatapoints("Plant.*");
-
-// Archive history — returns [{value, time}, ...]
-KPI.readHistory(dp, tStart, tEnd);
-KPI.readOriginalHistory(dp, tStart, tEnd);
-KPI.readCorrectionHistory(dp, tStart, tEnd);
-
-// Archive correction
-KPI.writeCorrection(dp, timestamp, 123.45);
-
-// KPI recalculation
-KPI.requestRecalculation({ sourceId, periodStart, periodEnd, ... });
-
-// Live monitoring
-const handle = KPI.subscribe(dp, value => { ... });
-KPI.unsubscribe(handle);
-```
-
-### CTRL Commands (kpiDataAccess.ctl)
-
-| Domain Command | CTRL Implementation | Description |
-|----------------|---------------------|-------------|
-| `loadConfig` | `dpGet("KPI_Config." + section)` | Load KPI configuration |
-| `saveConfig` | `dpSet("KPI_Config." + section, json)` | Save KPI configuration |
-| `browseDatapoints` | `dpNames("*" + filter + "*")` | List available datapoints |
-| `datapointExists` | `dpNames(dp)` + length check | Check DP existence |
-| `createDatapoint` | `dpCreate(name, typeId)` | Create new datapoint |
-| `readHistory` | `dpQuery(SELECT _offline.. TIMERANGE)` | Read effective archive |
-| `readOriginalHistory` | `dpQuery(SELECT _original.. TIMERANGE)` | Read original archive |
-| `readCorrectionHistory` | `dpQuery(SELECT _corr.. TIMERANGE)` | Read correction archive |
-| `writeCorrection` | `dpSetTimed(ts, dp:_corr.._value, val)` | Write archive correction |
-| `writeCorrectionBatch` | Multiple `dpSetTimed()` | Batch corrections |
-| `requestRecalculation` | `dpSet("KPI_Config.recalcRequest", json)` | Trigger KPI recalc |
-| `subscribe` | `dpConnect()` + `execJsFunction()` | Live value subscription |
-| `unsubscribe` | `dpDisconnect()` | Cancel subscription |
-
-JavaScript never touches WinCC OA attribute paths, SQL syntax, or DP naming conventions. The CTRL layer is the single source of truth for all WinCC OA integration details.
-
-In simulation mode, all calls are handled by a mock layer using `localStorage`.
-
----
-
-## Not Yet Implemented
-
-The following features from [Siemens Performance Insight](https://docs.industrial-operations-x.siemens.cloud/r/en-us/v1.19/performance-insight) are **not yet implemented** and are candidates for future development:
-
-| Feature | Description | PI Reference |
-|---------|-------------|--------------|
-| **Shift Calendar** | Configurable shift definitions (start/end times, days of week) used to automatically assign time categories (Shift 1/2/3, weekend, holiday). Enables shift-based OEE aggregation and reporting. | Time Model / Shift Configuration |
-| **Custom KPI Formulas** | User-defined formula builder allowing operators (+, -, ×, ÷, min, max) and operands (other KPIs, constants, counters) to create composite KPIs beyond the predefined aggregation methods. | Custom KPI Configuration |
-| **Step Time Analysis** | Sequence/batch step duration analysis — tracks execution time of individual production steps within a cycle, identifies bottleneck steps, and compares actual vs. target step times. | Step Analysis |
-| **Histogram / Boxplot Widgets** | Statistical distribution visualization for KPI values (histograms, box-and-whisker plots, Cpk/Cp process capability indices). Useful for quality analysis and process variability monitoring. | Statistical Widgets |
-| **Report Generation** | Scheduled report generation in Excel/CSV/PDF format with configurable content (KPI summaries, OEE trends, downtime analysis). Optional email delivery on schedule or threshold violation. | Report Configuration |
-| **Post-Production Reason Editing** | Allows operators to reassign or annotate downtime causes after the fact (e.g., reclassify an "Unknown Stop" as "Material Shortage"). Includes approval workflow and audit trail. | Reason Assignment |
-| **Multi-Asset Aggregation** | Plant-level and line-level KPI aggregation across multiple machines/assets. Hierarchical asset tree with roll-up calculations (weighted OEE, total availability, aggregated MTBF/MTTR). | Asset Hierarchy / Plant KPIs |
-
-### Partially Implemented
-
-| Feature | Current State | Remaining Work |
-|---------|---------------|----------------|
-| **Microstop Filtering** | Duration-based threshold filtering implemented | Add automatic microstop pattern detection and categorization |
-| **Hierarchical Cause Tree** | Parent-child cause relationships with indented Pareto | Add drag-and-drop tree editing, multi-level depth beyond 2 |
-| **CSV Export** | State analysis, cause analysis, OEE summary export | Add scheduled/automated export and Excel (XLSX) format |
+- [Architecture](docs/architecture.md) — Data access layer, module structure, CTRL integration
+- [Functional Specification](docs/functional-spec.md) — Detailed feature descriptions
+- [User Manual](docs/user-manual.md) — Step-by-step usage instructions

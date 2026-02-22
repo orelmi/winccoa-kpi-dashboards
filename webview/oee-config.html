@@ -1,0 +1,255 @@
+<!-- WinCC OA KPI — OEE Configuration
+     Loaded via loadSnippet() in WebView EWO or standalone in browser. -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="css/style.css">
+
+  <header class="app-header" id="appHeader"></header>
+  <nav class="tab-nav" id="appNav"></nav>
+
+  <main class="tab-content">
+    <div class="pane-toolbar">
+      <h2>OEE Configuration</h2>
+      <button class="btn btn-primary" id="btnAddOee">+ Add OEE Line</button>
+    </div>
+    <div id="oeeList"></div>
+    <div class="empty-state" id="oeeEmpty">
+      <p>No OEE configurations. Click <strong>+ Add OEE Line</strong> to configure Overall Equipment Effectiveness.</p>
+    </div>
+  </main>
+
+  <!-- MODAL: OEE Configuration -->
+  <div class="modal-overlay" id="modalOee">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h3 id="modalOeeTitle">Add OEE Configuration</h3>
+        <button class="modal-close" data-close="modalOee">&times;</button>
+      </div>
+      <form id="formOee" class="modal-body">
+        <input type="hidden" id="oeeEditId">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="oeeName">Line / Equipment Name</label>
+            <input type="text" id="oeeName" required placeholder="e.g. Packaging Line 1">
+          </div>
+          <div class="form-group">
+            <label for="oeeMachine">Machine (State Source)</label>
+            <select id="oeeMachine" required>
+              <option value="">-- Select Machine --</option>
+            </select>
+          </div>
+        </div>
+
+        <fieldset class="form-fieldset">
+          <legend>Availability</legend>
+          <p class="form-hint">Availability = (Planned Production Time - Unplanned Downtime) / Planned Production Time</p>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeePlannedHours">Planned Production Hours/Day</label>
+              <input type="number" id="oeePlannedHours" value="24" min="0" max="24" step="0.5">
+            </div>
+            <div class="form-group">
+              <label for="oeeAvailMethod">Calculation Method</label>
+              <select id="oeeAvailMethod">
+                <option value="FROM_STATES">From Machine States (auto)</option>
+                <option value="MANUAL_DP">From Datapoints (manual)</option>
+              </select>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="form-fieldset">
+          <legend>Performance</legend>
+          <p class="form-hint">Performance = (Ideal Cycle Time x Total Pieces) / Run Time</p>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeePerfMethod">Calculation Method</label>
+              <select id="oeePerfMethod">
+                <option value="CYCLE_TIME">Ideal Cycle Time</option>
+                <option value="DESIGN_SPEED">Design Speed</option>
+              </select>
+            </div>
+            <div class="form-group" id="grpCycleTime">
+              <label for="oeeIdealCycle">Ideal Cycle Time (seconds)</label>
+              <input type="number" id="oeeIdealCycle" value="1" min="0.001" step="0.001">
+            </div>
+            <div class="form-group" id="grpDesignSpeed" style="display:none;">
+              <label for="oeeDesignSpeed">Design Speed (units/hour)</label>
+              <input type="number" id="oeeDesignSpeed" value="1000" min="1">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeePiecesSource">Total Pieces Source</label>
+              <select id="oeePiecesSource">
+                <option value="">-- Select Source (counter) --</option>
+              </select>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="form-fieldset">
+          <legend>Quality</legend>
+          <p class="form-hint">Quality = Good Pieces / Total Pieces</p>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeeQualityMethod">Method</label>
+              <select id="oeeQualityMethod">
+                <option value="GOOD_PIECES">Good Pieces Counter</option>
+                <option value="REJECT_PIECES">Reject Counter (auto-calc good)</option>
+                <option value="FIXED_RATIO">Fixed Ratio (%)</option>
+              </select>
+            </div>
+            <div class="form-group" id="grpGoodPieces">
+              <label for="oeeGoodSource">Good Pieces Source</label>
+              <select id="oeeGoodSource">
+                <option value="">-- Select Source --</option>
+              </select>
+            </div>
+            <div class="form-group" id="grpRejectPieces" style="display:none;">
+              <label for="oeeRejectSource">Reject Pieces Source</label>
+              <select id="oeeRejectSource">
+                <option value="">-- Select Source --</option>
+              </select>
+            </div>
+            <div class="form-group" id="grpFixedRatio" style="display:none;">
+              <label for="oeeFixedQuality">Fixed Quality (%)</label>
+              <input type="number" id="oeeFixedQuality" value="100" min="0" max="100" step="0.1">
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="form-fieldset">
+          <legend>Calculation Schedule</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeePeriod">Aggregation Period</label>
+              <select id="oeePeriod">
+                <option value="SHIFT">Per Shift</option>
+                <option value="DAY">Daily</option>
+                <option value="WEEK">Weekly</option>
+                <option value="MONTH">Monthly</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="oeeTargetDp">Result Datapoint Prefix</label>
+              <input type="text" id="oeeTargetDp" placeholder="Auto-generated if empty">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="oeeEnabled" checked> Enabled
+              </label>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="form-fieldset">
+          <legend>Microstop Filtering</legend>
+          <p class="form-hint">Stops shorter than the threshold are classified as microstops.
+            Microstops are counted separately and excluded from unplanned downtime in OEE availability calculation.</p>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeeMicrostopThreshold">Microstop Threshold (seconds)</label>
+              <input type="number" id="oeeMicrostopThreshold" value="0" min="0" step="1" placeholder="e.g. 120">
+              <span class="form-hint">Set to 0 to disable. Typical: 30-300s.</span>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="form-fieldset">
+          <legend>KPI Limits / Thresholds</legend>
+          <p class="form-hint">Define warning and alarm thresholds for KPI values.
+            Warning triggers at the first threshold, alarm at the second.
+            Leave empty for no threshold.</p>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeeLimitOeeWarn">OEE Warning (%)</label>
+              <input type="number" id="oeeLimitOeeWarn" step="0.1" min="0" max="100" placeholder="e.g. 65">
+            </div>
+            <div class="form-group">
+              <label for="oeeLimitOeeAlarm">OEE Alarm (%)</label>
+              <input type="number" id="oeeLimitOeeAlarm" step="0.1" min="0" max="100" placeholder="e.g. 50">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeeLimitAvailWarn">Availability Warning (%)</label>
+              <input type="number" id="oeeLimitAvailWarn" step="0.1" min="0" max="100" placeholder="e.g. 90">
+            </div>
+            <div class="form-group">
+              <label for="oeeLimitAvailAlarm">Availability Alarm (%)</label>
+              <input type="number" id="oeeLimitAvailAlarm" step="0.1" min="0" max="100" placeholder="e.g. 80">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeeLimitPerfWarn">Performance Warning (%)</label>
+              <input type="number" id="oeeLimitPerfWarn" step="0.1" min="0" max="100" placeholder="e.g. 85">
+            </div>
+            <div class="form-group">
+              <label for="oeeLimitPerfAlarm">Performance Alarm (%)</label>
+              <input type="number" id="oeeLimitPerfAlarm" step="0.1" min="0" max="100" placeholder="e.g. 70">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeeLimitQualWarn">Quality Warning (%)</label>
+              <input type="number" id="oeeLimitQualWarn" step="0.1" min="0" max="100" placeholder="e.g. 95">
+            </div>
+            <div class="form-group">
+              <label for="oeeLimitQualAlarm">Quality Alarm (%)</label>
+              <input type="number" id="oeeLimitQualAlarm" step="0.1" min="0" max="100" placeholder="e.g. 90">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeeLimitMtbfWarn">MTBF Warning (seconds)</label>
+              <input type="number" id="oeeLimitMtbfWarn" step="1" min="0" placeholder="e.g. 7200">
+            </div>
+            <div class="form-group">
+              <label for="oeeLimitMtbfAlarm">MTBF Alarm (seconds)</label>
+              <input type="number" id="oeeLimitMtbfAlarm" step="1" min="0" placeholder="e.g. 3600">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="oeeLimitMttrWarn">MTTR Warning (seconds)</label>
+              <input type="number" id="oeeLimitMttrWarn" step="1" min="0" placeholder="e.g. 1800">
+            </div>
+            <div class="form-group">
+              <label for="oeeLimitMttrAlarm">MTTR Alarm (seconds)</label>
+              <input type="number" id="oeeLimitMttrAlarm" step="1" min="0" placeholder="e.g. 3600">
+            </div>
+          </div>
+        </fieldset>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="modalOee">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save OEE Configuration</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Scripts -->
+  <script src="js/kpi.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/sourceConfig.js"></script>
+  <script src="js/machineStateConfig.js"></script>
+  <script src="js/oeeConfig.js"></script>
+  <script>
+    (function() {
+      const mode = KPI.init();
+      Nav.render('oee-config');
+      Nav.updateConnectionStatus(mode);
+      Utils.initModalCloseButtons();
+      SourceConfig.init();        // Data-only (populates selects)
+      MachineStateConfig.init();  // Data-only (populates selects)
+      OeeConfig.init();           // Full init (DOM present)
+    })();
+  </script>

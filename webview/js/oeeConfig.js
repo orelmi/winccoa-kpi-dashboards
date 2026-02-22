@@ -25,6 +25,7 @@ const OeeConfig = (() => {
   // ── Render OEE list ─────────────────────────────────────────
   function render() {
     const container = document.getElementById('oeeList');
+    if (!container) return; // Data-only mode: no DOM on this page
     const empty = document.getElementById('oeeEmpty');
     const machines = MachineStateConfig.getAll();
     const sources = SourceConfig.getAll();
@@ -304,15 +305,16 @@ const OeeConfig = (() => {
 
   // ── Init ────────────────────────────────────────────────────
   function init() {
-    document.getElementById('btnAddOee').addEventListener('click', openAdd);
-    document.getElementById('formOee').addEventListener('submit', saveFromForm);
-    document.getElementById('oeePerfMethod').addEventListener('change', _onPerfMethodChange);
-    document.getElementById('oeeQualityMethod').addEventListener('change', _onQualityMethodChange);
-
-    // Re-render when dependencies change
-    SourceConfig.onChange(() => { render(); });
-    MachineStateConfig.onChange(() => { render(); });
-
+    const btn = document.getElementById('btnAddOee');
+    if (btn) {
+      btn.addEventListener('click', openAdd);
+      document.getElementById('formOee').addEventListener('submit', saveFromForm);
+      document.getElementById('oeePerfMethod').addEventListener('change', _onPerfMethodChange);
+      document.getElementById('oeeQualityMethod').addEventListener('change', _onQualityMethodChange);
+      // Re-render when dependencies change
+      SourceConfig.onChange(() => { render(); });
+      MachineStateConfig.onChange(() => { render(); });
+    }
     load();
   }
 

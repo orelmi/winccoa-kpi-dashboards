@@ -1,0 +1,222 @@
+<!-- WinCC OA KPI — Calendar / Shift Configuration
+     Loaded via loadSnippet() in WebView EWO or standalone in browser. -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="css/style.css">
+
+  <header class="app-header" id="appHeader"></header>
+  <nav class="tab-nav" id="appNav"></nav>
+
+  <main class="tab-content">
+    <!-- Shift Definitions -->
+    <div class="pane-toolbar">
+      <h2>Shift Definitions</h2>
+      <button class="btn btn-primary" id="btnAddShift">+ Add Shift</button>
+    </div>
+    <div id="calendarShiftList"></div>
+    <div class="empty-state" id="calendarShiftEmpty">
+      <p>No shifts defined. Click <strong>+ Add Shift</strong> to configure production shifts.</p>
+    </div>
+
+    <!-- Exception Days -->
+    <div class="pane-toolbar" style="margin-top:24px;">
+      <h2>Exception Days</h2>
+      <button class="btn btn-primary" id="btnAddException">+ Add Exception</button>
+    </div>
+    <table class="config-table" id="calendarExceptionTable">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Date</th>
+          <th>Category</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="calendarExceptionList"></tbody>
+    </table>
+    <div class="empty-state" id="calendarExceptionEmpty">
+      <p>No exception days. Click <strong>+ Add Exception</strong> to define holidays or special days.</p>
+    </div>
+
+    <!-- External Connector -->
+    <div class="pane-toolbar" style="margin-top:24px;">
+      <h2>External Connector (optional)</h2>
+      <button class="btn btn-secondary" id="btnConfigConnector">Configure Connector</button>
+    </div>
+    <div id="connectorStatus">
+      <p class="form-hint">No external connector configured. Calendar is managed manually.</p>
+    </div>
+  </main>
+
+  <!-- MODAL: Shift Configuration -->
+  <div class="modal-overlay" id="modalShift">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modalShiftTitle">Add Shift</h3>
+        <button class="modal-close" data-close="modalShift">&times;</button>
+      </div>
+      <form id="formShift" class="modal-body">
+        <input type="hidden" id="shiftEditId">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="shiftName">Shift Name</label>
+            <input type="text" id="shiftName" required placeholder="e.g. Morning Shift">
+          </div>
+          <div class="form-group">
+            <label for="shiftCategory">Category</label>
+            <select id="shiftCategory">
+              <option value="PRODUCTION">Production</option>
+              <option value="MAINTENANCE">Planned Maintenance</option>
+              <option value="CLEANING">Cleaning</option>
+              <option value="CHANGEOVER">Changeover</option>
+              <option value="NON_PRODUCTION">Non-Production</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="shiftStart">Start Time</label>
+            <input type="time" id="shiftStart" required value="06:00">
+          </div>
+          <div class="form-group">
+            <label for="shiftEnd">End Time</label>
+            <input type="time" id="shiftEnd" required value="14:00">
+          </div>
+        </div>
+        <fieldset class="form-fieldset">
+          <legend>Days of Week</legend>
+          <div style="display:flex;gap:12px;flex-wrap:wrap;">
+            <label class="checkbox-label" style="margin-top:0;">
+              <input type="checkbox" id="shiftDay1" checked> Mon
+            </label>
+            <label class="checkbox-label" style="margin-top:0;">
+              <input type="checkbox" id="shiftDay2" checked> Tue
+            </label>
+            <label class="checkbox-label" style="margin-top:0;">
+              <input type="checkbox" id="shiftDay3" checked> Wed
+            </label>
+            <label class="checkbox-label" style="margin-top:0;">
+              <input type="checkbox" id="shiftDay4" checked> Thu
+            </label>
+            <label class="checkbox-label" style="margin-top:0;">
+              <input type="checkbox" id="shiftDay5" checked> Fri
+            </label>
+            <label class="checkbox-label" style="margin-top:0;">
+              <input type="checkbox" id="shiftDay6"> Sat
+            </label>
+            <label class="checkbox-label" style="margin-top:0;">
+              <input type="checkbox" id="shiftDay0"> Sun
+            </label>
+          </div>
+        </fieldset>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="shiftEnabled" checked> Enabled
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="modalShift">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Shift</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Exception Day Configuration -->
+  <div class="modal-overlay" id="modalException">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modalExceptionTitle">Add Exception</h3>
+        <button class="modal-close" data-close="modalException">&times;</button>
+      </div>
+      <form id="formException" class="modal-body">
+        <input type="hidden" id="exEditId">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="exName">Name</label>
+            <input type="text" id="exName" required placeholder="e.g. Christmas Day">
+          </div>
+          <div class="form-group">
+            <label for="exDate">Date</label>
+            <input type="date" id="exDate" required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="exCategory">Category</label>
+            <select id="exCategory">
+              <option value="HOLIDAY">Public Holiday</option>
+              <option value="PLANT_SHUTDOWN">Plant Shutdown</option>
+              <option value="SPECIAL_MAINTENANCE">Special Maintenance</option>
+              <option value="OVERTIME">Overtime / Extra Shift</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="exRecurring"> Recurring every year
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="modalException">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Exception</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: Connector Configuration -->
+  <div class="modal-overlay" id="modalConnector">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h3>External Connector Configuration</h3>
+        <button class="modal-close" data-close="modalConnector">&times;</button>
+      </div>
+      <form id="formConnector" class="modal-body">
+        <p class="form-hint" style="margin-bottom:12px;">
+          Optionally connect to an external MES, ERP, or database to automatically import
+          shift calendars. The connector syncs periodically and updates the local calendar.
+        </p>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="connectorType">Connector Type</label>
+            <select id="connectorType">
+              <option value="NONE">None (manual)</option>
+              <option value="SAP_PP">SAP PP (Production Planning)</option>
+              <option value="SQL_DATABASE">SQL Database</option>
+              <option value="CSV_IMPORT">CSV File Import</option>
+              <option value="OPC_UA">OPC UA Calendar Node</option>
+              <option value="REST_API">REST API (MES/ERP)</option>
+            </select>
+          </div>
+        </div>
+        <div id="connectorFields">
+          <p class="form-hint">No additional configuration needed.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="modalConnector">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Connector</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Scripts -->
+  <script src="js/kpi.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/calendarConfig.js"></script>
+  <script>
+    (function() {
+      const mode = KPI.init();
+      Nav.render('calendar');
+      Nav.updateConnectionStatus(mode);
+      Utils.initModalCloseButtons();
+      CalendarConfig.init();
+    })();
+  </script>

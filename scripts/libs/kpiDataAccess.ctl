@@ -13,7 +13,8 @@
  *   readHistory, readOriginalHistory, readCorrectionHistory,
  *   writeCorrection, writeCorrectionBatch,
  *   requestRecalculation,
- *   subscribe, unsubscribe
+ *   subscribe, unsubscribe,
+ *   navigate
  *
  * Usage in panel (WebView EWO scripts):
  *   #uses "libs/kpiDataAccess"
@@ -66,6 +67,7 @@ void kpiHandleMessage(shape webView, mapping params)
   else if (cmd == "subscribe")            _kpiSubscribe(webView, params, p);
   else if (cmd == "unsubscribe")          _kpiUnsubscribe(webView, params, p);
   else if (cmd == "exportGanttMapping")   _kpiExportGanttMapping(webView, params, p);
+  else if (cmd == "navigate")            _kpiNavigate(webView, params, p);
   else
     DebugN("[kpiDataAccess] Unknown command:", cmd);
 }
@@ -352,6 +354,32 @@ void _kpiExportGanttMapping(shape ws, mapping params, mapping p)
 
   DebugN("[kpiDataAccess] Gantt mapping exported for machine " + machineId + " rc=" + rc);
   ws.msgToJs(params, rc);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// navigate — Load a different HTML page via loadSnippet
+//
+// { cmd:"navigate", page:"oee-config" }
+// Loads /webview/<page>.html into the WebView EWO.
+// This replaces the current page entirely.
+// ═══════════════════════════════════════════════════════════════
+
+void _kpiNavigate(shape ws, mapping params, mapping p)
+{
+  string page = p["page"];
+
+  // Validate: only allow known page names (no path traversal)
+  dyn_string validPages = makeDynString("sources", "aggregations", "machines",
+                                         "calendar", "oee-config", "oee-analysis", "index");
+  if (dynContains(validPages, page) <= 0)
+  {
+    DebugN("[kpiDataAccess] Invalid navigation page:", page);
+    return;
+  }
+
+  string url = "/webview/" + page + ".html";
+  DebugN("[kpiDataAccess] Navigating to " + url);
+  ws.loadSnippet(url);
 }
 
 // ═══════════════════════════════════════════════════════════════

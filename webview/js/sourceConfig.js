@@ -34,6 +34,7 @@ const SourceConfig = (() => {
   // ── Render table ────────────────────────────────────────────
   function render() {
     const tbody = document.getElementById('sourceTableBody');
+    if (!tbody) return; // Data-only mode: no DOM on this page
     const empty = document.getElementById('sourceEmpty');
     const table = document.getElementById('sourceTable');
 
@@ -159,8 +160,11 @@ const SourceConfig = (() => {
 
   // ── Init ────────────────────────────────────────────────────
   function init() {
-    document.getElementById('btnAddSource').addEventListener('click', openAdd);
-    document.getElementById('formSource').addEventListener('submit', saveFromForm);
+    const btn = document.getElementById('btnAddSource');
+    if (btn) {
+      btn.addEventListener('click', openAdd);
+      document.getElementById('formSource').addEventListener('submit', saveFromForm);
+    }
     load();
   }
 

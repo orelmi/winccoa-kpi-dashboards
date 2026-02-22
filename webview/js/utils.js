@@ -14,6 +14,7 @@ const Utils = (() => {
   function toast(message, type) {
     type = type || 'info';
     const container = document.getElementById('toastContainer');
+    if (!container) return;
     const el = document.createElement('div');
     el.className = 'toast toast-' + type;
     el.textContent = message;

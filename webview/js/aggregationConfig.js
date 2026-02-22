@@ -25,6 +25,7 @@ const AggregationConfig = (() => {
   // ── Render ──────────────────────────────────────────────────
   function render() {
     const tbody = document.getElementById('aggTableBody');
+    if (!tbody) return; // Data-only mode: no DOM on this page
     const empty = document.getElementById('aggEmpty');
     const table = document.getElementById('aggTable');
     const sources = SourceConfig.getAll();
@@ -159,13 +160,14 @@ const AggregationConfig = (() => {
 
   // ── Init ────────────────────────────────────────────────────
   function init() {
-    document.getElementById('btnAddAggregation').addEventListener('click', openAdd);
-    document.getElementById('formAggregation').addEventListener('submit', saveFromForm);
-    document.getElementById('aggPeriodType').addEventListener('change', _onPeriodTypeChange);
-
-    // Re-render when sources change
-    SourceConfig.onChange(() => { render(); });
-
+    const btn = document.getElementById('btnAddAggregation');
+    if (btn) {
+      btn.addEventListener('click', openAdd);
+      document.getElementById('formAggregation').addEventListener('submit', saveFromForm);
+      document.getElementById('aggPeriodType').addEventListener('change', _onPeriodTypeChange);
+      // Re-render when sources change
+      SourceConfig.onChange(() => { render(); });
+    }
     load();
   }
 

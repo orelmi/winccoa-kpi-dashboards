@@ -1,0 +1,144 @@
+<!-- WinCC OA KPI — Aggregations Configuration
+     Loaded via loadSnippet() in WebView EWO or standalone in browser. -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="css/style.css">
+
+  <header class="app-header" id="appHeader"></header>
+  <nav class="tab-nav" id="appNav"></nav>
+
+  <main class="tab-content">
+    <div class="pane-toolbar">
+      <h2>KPI Aggregations</h2>
+      <button class="btn btn-primary" id="btnAddAggregation">+ Add Aggregation</button>
+    </div>
+    <table class="config-table" id="aggTable">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Source</th>
+          <th>Method</th>
+          <th>Period</th>
+          <th>Target DP</th>
+          <th>Enabled</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="aggTableBody"></tbody>
+    </table>
+    <div class="empty-state" id="aggEmpty">
+      <p>No aggregations configured yet. Click <strong>+ Add Aggregation</strong> to begin.</p>
+    </div>
+  </main>
+
+  <!-- MODAL: Aggregation Configuration -->
+  <div class="modal-overlay" id="modalAggregation">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="modalAggTitle">Add Aggregation</h3>
+        <button class="modal-close" data-close="modalAggregation">&times;</button>
+      </div>
+      <form id="formAggregation" class="modal-body">
+        <input type="hidden" id="aggEditId">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="aggName">KPI Name</label>
+            <input type="text" id="aggName" required placeholder="e.g. Hourly Water Consumption">
+          </div>
+          <div class="form-group">
+            <label for="aggSource">Source</label>
+            <select id="aggSource" required>
+              <option value="">-- Select Source --</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="aggMethod">Aggregation Method</label>
+            <select id="aggMethod">
+              <option value="SUM">Sum</option>
+              <option value="AVG">Average</option>
+              <option value="MIN">Minimum</option>
+              <option value="MAX">Maximum</option>
+              <option value="COUNT">Count</option>
+              <option value="DELTA">Delta (Counter)</option>
+              <option value="TIME_WEIGHTED_AVG">Time-Weighted Average</option>
+              <option value="FLOW_FROM_COUNTER">Flow Rate from Counter</option>
+              <option value="UPTIME_RATIO">Uptime Ratio</option>
+              <option value="STDDEV">Standard Deviation</option>
+            </select>
+          </div>
+        </div>
+        <fieldset class="form-fieldset">
+          <legend>Aggregation Period</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label for="aggPeriodType">Period Type</label>
+              <select id="aggPeriodType">
+                <option value="CALENDAR_ALIGNED">Calendar Aligned</option>
+                <option value="SLIDING">Sliding Window</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="aggAlignment">Alignment / Duration</label>
+              <select id="aggAlignment">
+                <option value="MINUTE_15">15 Minutes</option>
+                <option value="HOUR">Hour</option>
+                <option value="SHIFT">Shift</option>
+                <option value="DAY">Day</option>
+                <option value="WEEK">Week</option>
+                <option value="MONTH">Month</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row" id="rowSlidingDuration" style="display:none;">
+            <div class="form-group">
+              <label for="aggSlidingSeconds">Sliding Duration (seconds)</label>
+              <input type="number" id="aggSlidingSeconds" value="3600" min="1">
+            </div>
+          </div>
+        </fieldset>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="aggTargetDp">Target Datapoint</label>
+            <input type="text" id="aggTargetDp" placeholder="Auto-generated if empty">
+          </div>
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" id="aggEnabled" checked> Enabled
+            </label>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group full-width">
+            <label for="aggExpression">Custom Expression (optional)</label>
+            <input type="text" id="aggExpression" placeholder="e.g. delta / periodSeconds * 3600">
+            <span class="form-hint">Variables: delta, sum, avg, min, max, count, periodSeconds</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="modalAggregation">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Aggregation</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Scripts -->
+  <script src="js/kpi.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/sourceConfig.js"></script>
+  <script src="js/aggregationConfig.js"></script>
+  <script>
+    (function() {
+      const mode = KPI.init();
+      Nav.render('aggregations');
+      Nav.updateConnectionStatus(mode);
+      Utils.initModalCloseButtons();
+      SourceConfig.init();       // Data-only (no DOM for sources on this page)
+      AggregationConfig.init();  // Full init (DOM present)
+    })();
+  </script>

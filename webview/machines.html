@@ -1,0 +1,188 @@
+<!-- WinCC OA KPI — Machine States Configuration
+     Loaded via loadSnippet() in WebView EWO or standalone in browser. -->
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="css/style.css">
+
+  <header class="app-header" id="appHeader"></header>
+  <nav class="tab-nav" id="appNav"></nav>
+
+  <main class="tab-content">
+    <div class="pane-toolbar">
+      <h2>Machine State Configuration</h2>
+      <button class="btn btn-primary" id="btnAddMachine">+ Add Machine</button>
+    </div>
+    <div id="machineList"></div>
+    <div class="empty-state" id="machineEmpty">
+      <p>No machines configured. Click <strong>+ Add Machine</strong> to define machine states.</p>
+    </div>
+  </main>
+
+  <!-- MODAL: Machine Configuration -->
+  <div class="modal-overlay" id="modalMachine">
+    <div class="modal modal-wide">
+      <div class="modal-header">
+        <h3 id="modalMachineTitle">Add Machine</h3>
+        <button class="modal-close" data-close="modalMachine">&times;</button>
+      </div>
+      <form id="formMachine" class="modal-body">
+        <input type="hidden" id="machEditId">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="machName">Machine Name</label>
+            <input type="text" id="machName" required placeholder="e.g. Packaging Line 1">
+          </div>
+          <div class="form-group">
+            <label for="machStateDp">State Datapoint</label>
+            <div class="dp-selector">
+              <input type="text" id="machStateDp" required placeholder="System1:Line1.MachineState">
+              <button type="button" class="btn btn-sm" id="btnBrowseMachDp">Browse</button>
+            </div>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="machStateType">State Signal Type</label>
+            <select id="machStateType">
+              <option value="INT_CODE">Integer Code (0,1,2...)</option>
+              <option value="STRING_STATE">String State</option>
+              <option value="MULTI_BOOL">Multiple Booleans</option>
+            </select>
+          </div>
+        </div>
+        <fieldset class="form-fieldset">
+          <legend>State Definitions</legend>
+          <p class="form-hint">Define each possible machine state and categorize it for OEE calculation.</p>
+          <table class="config-table compact" id="stateDefTable">
+            <thead>
+              <tr>
+                <th>Value</th>
+                <th>Label</th>
+                <th>Category</th>
+                <th>Color</th>
+                <th>Is Planned</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="stateDefBody"></tbody>
+          </table>
+          <button type="button" class="btn btn-sm btn-secondary" id="btnAddStateDef">+ Add State</button>
+        </fieldset>
+        <fieldset class="form-fieldset">
+          <legend>Downtime Cause Tracking</legend>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="machTrackCauses"> Enable Cause Tracking
+              </label>
+            </div>
+            <div class="form-group">
+              <label for="machCauseDp">Cause Datapoint</label>
+              <input type="text" id="machCauseDp" placeholder="System1:Line1.StopCause">
+            </div>
+          </div>
+          <div id="causeDefSection" style="display:none;">
+            <table class="config-table compact" id="causeDefTable">
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Label</th>
+                  <th>Category</th>
+                  <th>Parent</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="causeDefBody"></tbody>
+            </table>
+            <button type="button" class="btn btn-sm btn-secondary" id="btnAddCauseDef">+ Add Cause</button>
+          </div>
+        </fieldset>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="modalMachine">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Machine</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL: DP Browser -->
+  <div class="modal-overlay" id="modalDpBrowser">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Datapoint Browser</h3>
+        <button class="modal-close" data-close="modalDpBrowser">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="dpBrowserFilter">Filter</label>
+          <input type="text" id="dpBrowserFilter" placeholder="Type to filter datapoints...">
+        </div>
+        <div class="dp-tree" id="dpBrowserTree"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close="modalDpBrowser">Cancel</button>
+          <button type="button" class="btn btn-primary" id="btnDpBrowserSelect">Select</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- Scripts -->
+  <script src="js/kpi.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="js/machineStateConfig.js"></script>
+  <script>
+    (function() {
+      const mode = KPI.init();
+      Nav.render('machines');
+      Nav.updateConnectionStatus(mode);
+      Utils.initModalCloseButtons();
+
+      // DP Browser for machine state DP
+      var _dpBrowserCallback = null, _selectedDp = null;
+      document.getElementById('btnBrowseMachDp').addEventListener('click', function() {
+        _dpBrowserCallback = function(dp) { document.getElementById('machStateDp').value = dp; };
+        _selectedDp = null;
+        document.getElementById('dpBrowserFilter').value = '';
+        _loadDpTree('');
+        Utils.openModal('modalDpBrowser');
+      });
+      document.getElementById('dpBrowserFilter').addEventListener('input', function() {
+        _loadDpTree(this.value);
+      });
+      document.getElementById('btnDpBrowserSelect').addEventListener('click', function() {
+        if (_selectedDp && _dpBrowserCallback) {
+          _dpBrowserCallback(_selectedDp);
+          Utils.closeModal('modalDpBrowser');
+        }
+      });
+      async function _loadDpTree(filter) {
+        var tree = document.getElementById('dpBrowserTree');
+        tree.innerHTML = '<p style="color:#6b7c8e;padding:8px;">Loading...</p>';
+        try {
+          var dps = await KPI.browseDatapoints(filter);
+          if (dps.length === 0) { tree.innerHTML = '<p style="color:#6b7c8e;padding:8px;">No datapoints found.</p>'; return; }
+          tree.innerHTML = dps.map(function(dp) {
+            return '<div class="dp-item" data-dp="' + Utils.escapeHtml(dp) + '">' + Utils.escapeHtml(dp) + '</div>';
+          }).join('');
+          tree.querySelectorAll('.dp-item').forEach(function(item) {
+            item.addEventListener('click', function() {
+              tree.querySelectorAll('.dp-item').forEach(function(i) { i.classList.remove('selected'); });
+              item.classList.add('selected');
+              _selectedDp = item.getAttribute('data-dp');
+            });
+            item.addEventListener('dblclick', function() {
+              _selectedDp = item.getAttribute('data-dp');
+              if (_dpBrowserCallback) { _dpBrowserCallback(_selectedDp); Utils.closeModal('modalDpBrowser'); }
+            });
+          });
+        } catch (err) {
+          tree.innerHTML = '<p style="color:#d9363e;padding:8px;">Error: ' + err.message + '</p>';
+        }
+      }
+
+      MachineStateConfig.init();
+    })();
+  </script>
